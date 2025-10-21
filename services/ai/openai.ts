@@ -23,7 +23,7 @@ export class OpenAIService implements AIService {
       size: '1024x1024',
     });
 
-    const imageUrl = response.data[0]?.url;
+    const imageUrl = response.data?.[0]?.url;
     if (!imageUrl) {
       throw new Error('Failed to enhance image');
     }
@@ -44,7 +44,7 @@ export class OpenAIService implements AIService {
       quality: 'hd',
     });
 
-    const imageUrl = response.data[0]?.url;
+    const imageUrl = response.data?.[0]?.url;
     if (!imageUrl) {
       throw new Error('Failed to rerender image');
     }
