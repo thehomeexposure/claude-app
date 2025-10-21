@@ -3,6 +3,7 @@ import { put } from "@vercel/blob";
 
 /**
  * Normalize various input types to a Blob without using `any`.
+ * Always wrap ArrayBuffer-like data in Uint8Array so BlobPart is ArrayBufferView.
  */
 function toBlob(
   data: Blob | File | ArrayBuffer | Uint8Array | string,
@@ -16,16 +17,17 @@ function toBlob(
   }
 
   if (data instanceof Uint8Array) {
-    // Fix: convert to ArrayBuffer slice for compatibility with Blob
+    // Use the exact slice of the underlying buffer, then wrap in Uint8Array
     const slice = data.buffer.slice(
       data.byteOffset,
       data.byteOffset + data.byteLength
     );
-    return new Blob([slice], { type: contentType });
+    return new Blob([new Uint8Array(slice)], { type: contentType });
   }
 
   if (data instanceof ArrayBuffer) {
-    return new Blob([data], { type: contentType });
+    // Wrap ArrayBuffer in a Uint8Array to satisfy BlobPart (ArrayBufferView)
+    return new Blob([new Uint8Array(data)], { type: contentType });
   }
 
   throw new TypeError("Unsupported data type for upload");
