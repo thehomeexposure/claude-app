@@ -1,4 +1,3 @@
-// lib/s3.ts
 import { put } from "@vercel/blob";
 /**
  * Normalize input to a Blob without `any`.
@@ -26,6 +25,7 @@ function toBlob(
   }
   throw new TypeError("Unsupported data type for upload");
 }
+
 /**
  * Download a file from Vercel Blob storage using its URL.
  */
@@ -43,6 +43,7 @@ export async function getFromS3(urlOrKey: string): Promise<Buffer> {
   const arrayBuffer = await response.arrayBuffer();
   return Buffer.from(arrayBuffer);
 }
+
 /**
  * Keep legacy S3-style signature: return a STRING URL.
  */
@@ -59,6 +60,7 @@ export async function uploadToS3(
   });
   return uploaded.url;
 }
+
 /**
  * Optional: need both key + URL.
  */
@@ -75,6 +77,7 @@ export async function uploadToS3WithMeta(
   });
   return { key: uploaded.pathname ?? filename, url: uploaded.url };
 }
+
 /**
  * Blob files are public; keep this for compatibility.
  */
