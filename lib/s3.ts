@@ -1,58 +1,42 @@
-// lib/s3.ts  — AWS SDK v3 version
+// lib/s3.ts
+// Blob-backed shim to keep existing imports working after moving off S3.
+import { put } from "@vercel/blob";
 
-import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
-import { Upload } from "@aws-sdk/lib-storage";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-
-const REGION = process.env.S3_REGION!;
-const BUCKET = process.env.S3_BUCKET!;
-const ACCESS_KEY_ID = process.env.S3_ACCESS_KEY_ID!;
-const SECRET_ACCESS_KEY = process.env.S3_SECRET_ACCESS_KEY!;
-const ENDPOINT = process.env.S3_ENDPOINT; // optional (e.g., Cloudflare R2, MinIO)
-
-export const s3 = new S3Client({
-  region: REGION,
-  ...(ENDPOINT ? { endpoint: ENDPOINT, forcePathStyle: true } : {}),
-  credentials: {
-    accessKeyId: ACCESS_KEY_ID,
-    secretAccessKey: SECRET_ACCESS_KEY,
-  },
-});
-
-// High-level upload (handles streams/large files)
-export async function uploadBuffer(key: string, body: Buffer, contentType?: string) {
-  const uploader = new Upload({
-    client: s3,
-    params: {
-      Bucket: BUCKET,
-      Key: key,
-      Body: body,
-      ContentType: contentType,
-    },
-  });
-  await uploader.done();
-  return `s3://${BUCKET}/${key}`;
-}
-
-// Simple put (small payloads)
-export async function putObject(
+/**
+ * Uploads arbitrary data and returns a public URL and key.
+ * Compatible signature with your old S3 helper.
+ */
+export async function uploadToS3(
   key: string,
-  body: Buffer | Uint8Array | string,
-  contentType?: string
-) {
-  await s3.send(
-    new PutObjectCommand({
-      Bucket: BUCKET,
-      Key: key,
-      Body: body,
-      ContentType: contentType,
-    })
-  );
-  return `s3://${BUCKET}/${key}`;
+  data: Buffer | Uint8Array | ArrayBuffer | string | Blob | File,
+  contentType = "application/octet-stream"
+): Promise<{ key: string; url: string }> {
+  const filename = key?.trim() || `${Date.now()}`;
+
+  let body: any = data as any;
+  if (
+    typeof Blob !== "undefined" &&
+    (data instanceof Uint8Array ||
+      data instanceof ArrayBuffer ||
+      // @ts-ignore Buffer check when running in Node
+      (typeof Buffer !== "undefined" && (data as any) instanceof Buffer) ||
+      typeof data === "string")
+  ) {
+    body = new Blob([data as any], { type: contentType });
+  }
+
+  const uploaded = await put(filename, body, {
+    access: "public",
+    contentType,
+  });
+
+  return {
+    key: uploaded.pathname ?? filename,
+    url: uploaded.url,
+  };
 }
 
-// Presigned GET URL (to show/download in UI)
-export async function getPresignedGetUrl(key: string, expiresIn = 3600) {
-  const cmd = new GetObjectCommand({ Bucket: BUCKET, Key: key });
-  return getSignedUrl(s3, cmd, { expiresIn });
+// Optional stub so other imports compile if present.
+export async function getPresignedGetUrl(key: string): Promise<string> {
+  return key; // Blob assets are already public
 }

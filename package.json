@@ -19,6 +19,7 @@
     "@google/generative-ai": "^0.21.0",
     "@prisma/client": "^6.2.0",
     "@uploadthing/react": "^7.1.0",
+    "@vercel/blob": "^2.0.0",
     "bullmq": "^5.38.3",
     "ioredis": "^5.4.2",
     "next": "15.5.6",
