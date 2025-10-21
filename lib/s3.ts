@@ -27,6 +27,23 @@ function toBlob(
   throw new TypeError("Unsupported data type for upload");
 }
 /**
+ * Download a file from Vercel Blob storage using its URL.
+ */
+export async function getFromS3(urlOrKey: string): Promise<Buffer> {
+  // If it's a key/pathname, construct the full URL
+  // Otherwise assume it's already a full URL
+  const url = urlOrKey.startsWith('http') 
+    ? urlOrKey 
+    : `https://blob.vercel-storage.com/${urlOrKey}`;
+  
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch blob: ${response.statusText}`);
+  }
+  const arrayBuffer = await response.arrayBuffer();
+  return Buffer.from(arrayBuffer);
+}
+/**
  * Keep legacy S3-style signature: return a STRING URL.
  */
 export async function uploadToS3(
