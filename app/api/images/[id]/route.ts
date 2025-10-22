@@ -5,27 +5,28 @@ import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-type Params = { params: { id: string } };
-
 // GET /api/images/:id
-export const GET = async (_req: NextRequest, { params }: Params) => {
+export async function GET(
+  _req: NextRequest,
+  ctx: { params: { id: string } }
+) {
   try {
     const user = await requireAuth();
 
     const image = await db.image.findFirst({
-      where: { id: params.id, userId: user.id },
-      // NOTE: removed `include: { jobs: ... }` because we don't have a Job model
+      where: { id: ctx.params.id, userId: user.id },
+      // no `jobs` include since we don't have a Job model yet
     });
 
     if (!image) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    // If your UI expects `image.jobs`, return an empty array to keep shape stable
+    // Preserve expected shape if UI reads image.jobs
     return NextResponse.json({ image: { ...image, jobs: [] as unknown[] } });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("Get image error:", msg);
     return NextResponse.json({ error: "Failed to fetch image" }, { status: 500 });
   }
-};
+}
