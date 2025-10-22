@@ -1,37 +1,35 @@
 // lib/redis.ts
-// Safe Redis accessor that won't connect during build or without proper env.
-// Works with Upstash (preferred) or any hosted Redis URL.
+// Safe Redis accessor that won't break build and won't use localhost.
+// Uses REDIS_URL with ioredis if available; otherwise returns null.
 
 let _client: any | null = null;
 
+function safeRequire<T = any>(name: string): T | null {
+  try {
+    // avoid bundler static resolution
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    const req = (0, eval)("require") as NodeRequire;
+    return req(name) as T;
+  } catch {
+    return null;
+  }
+}
+
 export function getRedis() {
-  // Prefer Upstash REST (serverless-friendly)
-  if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
-    if (!_client) {
-      // Lazy import to avoid bundling at build if unused
-      const { Redis } = require("@upstash/redis");
-      _client = new Redis({
-        url: process.env.UPSTASH_REDIS_REST_URL,
-        token: process.env.UPSTASH_REDIS_REST_TOKEN,
-      });
-    }
-    return _client as import("@upstash/redis").Redis;
-  }
+  const url = process.env.REDIS_URL;
+  if (!url) return null;
 
-  // Fallback: standard Redis (ioredis) via REDIS_URL (DO NOT default to localhost)
-  if (process.env.REDIS_URL) {
-    if (!_client) {
-      const IORedis = require("ioredis");
-      _client = new IORedis(process.env.REDIS_URL, {
-        lazyConnect: true,
-        maxRetriesPerRequest: 1,
-        enableReadyCheck: false,
-        // tls: {} // uncomment if your provider requires TLS but doesn't use rediss://
-      });
-    }
-    return _client as import("ioredis");
-  }
+  // Try to load ioredis at runtime; if not installed, return null gracefully
+  const IORedis = safeRequire<any>("ioredis");
+  if (!IORedis) return null;
 
-  // No Redis configured – return null to avoid crashes at build/prerender
-  return null;
+  if (!_client) {
+    _client = new IORedis(url, {
+      lazyConnect: true,
+      maxRetriesPerRequest: 1,
+      enableReadyCheck: false,
+      // tls: {} // uncomment if your provider needs TLS but plain redis://
+    });
+  }
+  return _client;
 }
