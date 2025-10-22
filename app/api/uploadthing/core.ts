@@ -34,11 +34,9 @@ export const ourFileRouter = {
         await db.image.create({
           data: {
             userId: user.id,
-            url: file.url, // Changed from originalUrl to url
-            projectId: defaultProject.id, // Added required projectId
-            filename: file.name,
-            mimeType: file.type || 'image/png',
-            size: file.size,
+            url: file.url,
+            projectId: defaultProject.id,
+            // Removed: filename, mimeType, size (these fields don't exist in your schema)
           },
         });
       }
