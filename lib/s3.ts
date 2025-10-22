@@ -1,86 +1,117 @@
-import { put } from "@vercel/blob";
+import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+
+// Cloudflare R2 client configuration
+const r2Client = new S3Client({
+  region: "auto",
+  endpoint: process.env.R2_ENDPOINT,
+  credentials: {
+    accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+  },
+});
+
+const BUCKET_NAME = process.env.R2_BUCKET_NAME!;
+
 /**
- * Normalize input to a Blob without `any`.
- * We always copy into a fresh Uint8Array so the backing buffer is a plain ArrayBuffer.
+ * Normalize input to a Buffer for upload.
  */
-function toBlob(
-  data: Blob | File | ArrayBuffer | Uint8Array | string,
-  contentType: string
-): Blob {
-  if (data instanceof Blob) return data;
-  if (typeof File !== "undefined" && data instanceof File) return data;
+function toBuffer(
+  data: Blob | File | ArrayBuffer | Uint8Array | string | Buffer
+): Buffer {
+  if (Buffer.isBuffer(data)) return data;
   if (typeof data === "string") {
-    return new Blob([data], { type: contentType });
+    return Buffer.from(data);
   }
   if (data instanceof Uint8Array) {
-    // Copy into a fresh Uint8Array (guaranteed ArrayBuffer backing)
-    const copy = new Uint8Array(data.byteLength);
-    copy.set(data);
-    return new Blob([copy], { type: contentType });
+    return Buffer.from(data);
   }
   if (data instanceof ArrayBuffer) {
-    // Wrap in a fresh Uint8Array (ArrayBufferView) to satisfy BlobPart
-    const view = new Uint8Array(data);
-    return new Blob([view], { type: contentType });
+    return Buffer.from(new Uint8Array(data));
   }
   throw new TypeError("Unsupported data type for upload");
 }
 
 /**
- * Download a file from Vercel Blob storage using its URL.
+ * Download a file from R2 using its key or URL.
  */
 export async function getFromS3(urlOrKey: string): Promise<Buffer> {
-  // If it's a key/pathname, construct the full URL
-  // Otherwise assume it's already a full URL
-  const url = urlOrKey.startsWith('http') 
-    ? urlOrKey 
-    : `https://blob.vercel-storage.com/${urlOrKey}`;
-  
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch blob: ${response.statusText}`);
+  // If it's a full URL, extract the key from it
+  let key = urlOrKey;
+  if (urlOrKey.startsWith('http')) {
+    const url = new URL(urlOrKey);
+    key = url.pathname.slice(1); // Remove leading slash
   }
-  const arrayBuffer = await response.arrayBuffer();
-  return Buffer.from(arrayBuffer);
+
+  const command = new GetObjectCommand({
+    Bucket: BUCKET_NAME,
+    Key: key,
+  });
+
+  const response = await r2Client.send(command);
+
+  if (!response.Body) {
+    throw new Error("Failed to fetch object from R2");
+  }
+
+  const chunks: Uint8Array[] = [];
+  for await (const chunk of response.Body as any) {
+    chunks.push(chunk);
+  }
+
+  return Buffer.concat(chunks);
 }
 
 /**
- * Keep legacy S3-style signature: return a STRING URL.
+ * Upload a file to R2 and return the public URL.
  */
 export async function uploadToS3(
   key: string,
-  data: Blob | File | ArrayBuffer | Uint8Array | string,
+  data: Blob | File | ArrayBuffer | Uint8Array | string | Buffer,
   contentType = "application/octet-stream"
 ): Promise<string> {
   const filename = key?.trim() || `${Date.now()}`;
-  const blob = toBlob(data, contentType);
-  const uploaded = await put(filename, blob, {
-    access: "public",
-    contentType,
+  const buffer = toBuffer(data);
+
+  const command = new PutObjectCommand({
+    Bucket: BUCKET_NAME,
+    Key: filename,
+    Body: buffer,
+    ContentType: contentType,
   });
-  return uploaded.url;
+
+  await r2Client.send(command);
+
+  // Construct the public URL
+  const publicUrl = `${process.env.R2_PUBLIC_URL}/${filename}`;
+  return publicUrl;
 }
 
 /**
- * Optional: need both key + URL.
+ * Upload to R2 and return both key and URL.
  */
 export async function uploadToS3WithMeta(
   key: string,
-  data: Blob | File | ArrayBuffer | Uint8Array | string,
+  data: Blob | File | ArrayBuffer | Uint8Array | string | Buffer,
   contentType = "application/octet-stream"
 ): Promise<{ key: string; url: string }> {
   const filename = key?.trim() || `${Date.now()}`;
-  const blob = toBlob(data, contentType);
-  const uploaded = await put(filename, blob, {
-    access: "public",
-    contentType,
-  });
-  return { key: uploaded.pathname ?? filename, url: uploaded.url };
+  const url = await uploadToS3(filename, data, contentType);
+  return { key: filename, url };
 }
 
 /**
- * Blob files are public; keep this for compatibility.
+ * Generate a presigned URL for getting an object from R2.
  */
-export async function getPresignedGetUrl(keyOrUrl: string): Promise<string> {
-  return keyOrUrl;
+export async function getPresignedGetUrl(
+  key: string,
+  expiresIn = 3600
+): Promise<string> {
+  const command = new GetObjectCommand({
+    Bucket: BUCKET_NAME,
+    Key: key,
+  });
+
+  const url = await getSignedUrl(r2Client, command, { expiresIn });
+  return url;
 }
