@@ -6,10 +6,19 @@ import { db } from "@/lib/db";
 export const dynamic = "force-dynamic";
 
 // POST /api/process/:imageId
-export async function POST(_req: NextRequest, context: any) {
+export async function POST(_req: NextRequest, context: unknown) {
   try {
     const user = await requireAuth();
-    const imageId = context?.params?.imageId as string;
+
+    const imageId =
+      (context as { params?: { imageId?: string } })?.params?.imageId;
+
+    if (!imageId) {
+      return NextResponse.json(
+        { error: "Missing imageId in route params" },
+        { status: 400 }
+      );
+    }
 
     // Ensure the image belongs to the user
     const image = await db.image.findFirst({
@@ -20,22 +29,22 @@ export async function POST(_req: NextRequest, context: any) {
       return NextResponse.json({ error: "Image not found" }, { status: 404 });
     }
 
-    // NOTE: We used to create a Job row here (db.job.create).
-    // Since there's no Job model yet, we return a stubbed job payload.
+    // No Job model yet — return a stubbed job payload so the UI can proceed.
     const job = {
       id: `queued-${Date.now()}`,
       imageId,
       status: "QUEUED",
-      steps: [] as string[], // fill later if you add real steps
+      steps: [] as string[],
       createdAt: new Date().toISOString(),
     };
-
-    // If you later wire a real queue, enqueue here instead of returning a stub.
 
     return NextResponse.json({ ok: true, job }, { status: 202 });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("Process image error:", msg);
-    return NextResponse.json({ error: "Failed to enqueue image processing" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to enqueue image processing" },
+      { status: 500 }
+    );
   }
 }
