@@ -1,37 +1,21 @@
-import { Queue } from 'bullmq';
-import { redis } from './redis';
+import { getRedis } from "@/lib/redis";
 
-export type ImageProcessingJob = {
-  imageId: string;
-  jobId: string;
-  steps: ('ENHANCE' | 'RERENDER' | 'UPSCALE')[];
-};
+/**
+ * Minimal queue helpers using Redis lists.
+ * - Works if REDIS_URL is set and ioredis is available.
+ * - If Redis is unavailable, functions no-op safely.
+ */
+export async function enqueue(queue: string, payload: string): Promise<boolean> {
+  const redis = getRedis();
+  if (!redis) return false;
+  // @ts-ignore (runtime client)
+  await redis.lpush(queue, payload);
+  return true;
+}
 
-const connection = redis;
-
-export const imageProcessingQueue = new Queue<ImageProcessingJob>(
-  'image-processing',
-  {
-    connection,
-    defaultJobOptions: {
-      attempts: 3,
-      backoff: {
-        type: 'exponential',
-        delay: 2000,
-      },
-      removeOnComplete: {
-        count: 100,
-        age: 60 * 60 * 24, // 24 hours
-      },
-      removeOnFail: {
-        count: 1000,
-      },
-    },
-  }
-);
-
-export const addImageProcessingJob = async (data: ImageProcessingJob) => {
-  return await imageProcessingQueue.add('process-image', data, {
-    jobId: data.jobId,
-  });
-};
+export async function dequeue(queue: string): Promise<string | null> {
+  const redis = getRedis();
+  if (!redis) return null;
+  // @ts-ignore
+  return await redis.rpop(queue);
+}
