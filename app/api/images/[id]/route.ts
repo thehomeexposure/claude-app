@@ -1,14 +1,15 @@
 // app/api/images/[id]/route.ts
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(_req: NextRequest, context: any) {
+export async function GET(_req: NextRequest, { params }: any) {
   try {
     const user = await requireAuth();
-    const { id } = (context?.params || {}) as { id: string };
+    const id = params?.id as string;
 
     const image = await db.image.findFirst({
       where: { id, userId: user.id },
