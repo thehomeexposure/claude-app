@@ -1,7 +1,7 @@
 // middleware.ts
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
-// Routes that DON'T require auth
+// Public (no auth required)
 const isPublicRoute = createRouteMatcher([
   "/",                 // home
   "/sign-in(.*)",      // Clerk sign-in
@@ -10,9 +10,11 @@ const isPublicRoute = createRouteMatcher([
   "/api/webhooks(.*)", // webhooks (if any)
 ]);
 
-export default clerkMiddleware((auth, req) => {
+export default clerkMiddleware(async (auth, req) => {
   // Protect everything that's not public
-  if (!isPublicRoute(req)) auth().protect();
+  if (!isPublicRoute(req)) {
+    await auth().protect();
+  }
 });
 
 // Run on app routes; skip Next assets & static files; always run for API
