@@ -1,35 +1,47 @@
 // lib/redis.ts
-// Safe Redis accessor that won't break build and won't use localhost.
+// Safe, typed Redis accessor for server runtime.
 // Uses REDIS_URL with ioredis if available; otherwise returns null.
 
-let _client: any | null = null;
+type RedisLike = {
+  lpush?: (key: string, value: string) => Promise<number>;
+  rpop?: (key: string) => Promise<string | null>;
+  get?: (key: string) => Promise<string | null>;
+  set?: (key: string, value: string, ...args: unknown[]) => Promise<unknown>;
+  connect?: () => Promise<void>;
+  quit?: () => Promise<void>;
+};
 
-function safeRequire<T = any>(name: string): T | null {
+type IORedisCtor = new (
+  url: string,
+  options?: Record<string, unknown>
+) => RedisLike;
+
+let client: RedisLike | null = null;
+
+function safeRequire(name: string): unknown {
   try {
-    // avoid bundler static resolution
+    // avoid static analysis bundling
     // eslint-disable-next-line @typescript-eslint/no-implied-eval
-    const req = (0, eval)("require") as NodeRequire;
-    return req(name) as T;
+    const req = (0, eval)("require") as (m: string) => unknown;
+    return req(name);
   } catch {
     return null;
   }
 }
 
-export function getRedis() {
+export function getRedis(): RedisLike | null {
   const url = process.env.REDIS_URL;
   if (!url) return null;
 
-  // Try to load ioredis at runtime; if not installed, return null gracefully
-  const IORedis = safeRequire<any>("ioredis");
+  const IORedis = safeRequire("ioredis") as IORedisCtor | null;
   if (!IORedis) return null;
 
-  if (!_client) {
-    _client = new IORedis(url, {
+  if (!client) {
+    client = new IORedis(url, {
       lazyConnect: true,
       maxRetriesPerRequest: 1,
       enableReadyCheck: false,
-      // tls: {} // uncomment if your provider needs TLS but plain redis://
-    });
+    } as Record<string, unknown>);
   }
-  return _client;
+  return client;
 }
