@@ -1,6 +1,4 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
+// prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
@@ -12,85 +10,33 @@ datasource db {
 
 model User {
   id        String    @id @default(cuid())
-  clerkId   String    @unique
-  email     String    @unique
+  clerkId   String    @unique        // Clerk user id
+  email     String?   @unique
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
   projects  Project[]
   images    Image[]
-
-  @@index([clerkId])
 }
 
 model Project {
   id          String   @id @default(cuid())
-  name        String
-  description String?
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId      String
+  name        String
+  description String?  @db.Text
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  images Image[]
-
-  @@index([userId])
+  images      Image[]
 }
 
 model Image {
-  id            String   @id @default(cuid())
-  userId        String
-  projectId     String?
-  originalUrl   String
-  processedUrl  String?
-  thumbnailUrl  String?
-  filename      String
-  mimeType      String
-  size          Int
-  width         Int?
-  height        Int?
-  metadata      Json?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  jobs    Job[]
-
-  @@index([userId])
-  @@index([projectId])
-}
-
-enum JobStatus {
-  PENDING
-  PROCESSING
-  COMPLETED
-  FAILED
-  RETRYING
-}
-
-enum JobStep {
-  ENHANCE
-  RERENDER
-  UPSCALE
-}
-
-model Job {
-  id          String    @id @default(cuid())
-  imageId     String
-  status      JobStatus @default(PENDING)
-  currentStep JobStep?
-  steps       Json      // Array of steps to execute: ["ENHANCE", "RERENDER", "UPSCALE"]
-  result      Json?     // Results from each step
-  error       String?
-  retryCount  Int       @default(0)
-  startedAt   DateTime?
-  completedAt DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  image Image @relation(fields: [imageId], references: [id], onDelete: Cascade)
-
-  @@index([imageId])
-  @@index([status])
+  id        String   @id @default(cuid())
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  url       String
+  createdAt DateTime @default(now())
 }
