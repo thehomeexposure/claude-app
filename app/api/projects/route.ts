@@ -1,7 +1,13 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth';
-import { db } from '@/lib/db';
+// app/api/projects/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import { requireAuth } from "@/lib/auth";
+import { db } from "@/lib/db";
 
+/**
+ * GET /api/projects
+ * Returns all projects for the authenticated user.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function GET(_req: NextRequest) {
   try {
     const user = await requireAuth();
@@ -13,28 +19,35 @@ export async function GET(_req: NextRequest) {
           select: { images: true },
         },
       },
-      orderBy: { updatedAt: 'desc' },
+      orderBy: { updatedAt: "desc" },
     });
 
     return NextResponse.json({ projects });
   } catch (error) {
-    console.error('Get projects error:', error);
+    console.error("Get projects error:", error);
     return NextResponse.json(
-      { error: 'Failed to fetch projects' },
+      { error: "Failed to fetch projects" },
       { status: 500 }
     );
   }
 }
 
+/**
+ * POST /api/projects
+ * Creates a new project for the authenticated user.
+ */
 export async function POST(req: NextRequest) {
   try {
     const user = await requireAuth();
     const body = await req.json();
-    const { name, description } = body;
+    const { name, description } = body as {
+      name?: string;
+      description?: string | null;
+    };
 
-    if (!name) {
+    if (!name || name.trim() === "") {
       return NextResponse.json(
-        { error: 'Project name is required' },
+        { error: "Project name is required" },
         { status: 400 }
       );
     }
@@ -42,16 +55,16 @@ export async function POST(req: NextRequest) {
     const project = await db.project.create({
       data: {
         userId: user.id,
-        name,
-        description: description || null,
+        name: name.trim(),
+        description: description?.trim() || null,
       },
     });
 
     return NextResponse.json({ project });
   } catch (error) {
-    console.error('Create project error:', error);
+    console.error("Create project error:", error);
     return NextResponse.json(
-      { error: 'Failed to create project' },
+      { error: "Failed to create project" },
       { status: 500 }
     );
   }

@@ -22,7 +22,7 @@ export default function Dashboard() {
       try {
         const res = await fetch("/api/projects", { cache: "no-store" });
         if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
+          const body = (await res.json().catch(() => ({}))) as { error?: string };
           throw new Error(body?.error || `Request failed: ${res.status}`);
         }
         const data = (await res.json()) as { projects: Project[] };
@@ -30,8 +30,9 @@ export default function Dashboard() {
           setProjects(data.projects);
           setError(null);
         }
-      } catch (e: any) {
-        if (!cancelled) setError(e?.message || "Failed to load projects");
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e);
+        if (!cancelled) setError(message);
       } finally {
         if (!cancelled) setLoading(false);
       }
