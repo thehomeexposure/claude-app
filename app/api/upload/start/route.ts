@@ -20,14 +20,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "url is required" }, { status: 400 });
     }
 
-    // Build a concrete object and only add projectId if present
+    // Auto-create a project if one isn't provided
+    let finalProjectId = projectId;
+    
+    if (!finalProjectId) {
+      const defaultProject = await db.project.create({
+        data: {
+          userId: user.id,
+          name: `Property ${new Date().toLocaleDateString()}`,
+        },
+      });
+      finalProjectId = defaultProject.id;
+    }
+
+    // Now projectId is always defined
     const data: Prisma.ImageUncheckedCreateInput = {
       userId: user.id,
       url,
+      projectId: finalProjectId,
     };
-    if (projectId) {
-      data.projectId = projectId;
-    }
 
     const image = await db.image.create({ data });
 
