@@ -23,10 +23,19 @@ export const ourFileRouter = {
       });
 
       if (user) {
+        // Auto-create a project if needed
+        const defaultProject = await db.project.create({
+          data: {
+            userId: user.id,
+            name: `Property ${new Date().toLocaleDateString()}`,
+          },
+        });
+
         await db.image.create({
           data: {
             userId: user.id,
-            originalUrl: file.url,
+            url: file.url, // Changed from originalUrl to url
+            projectId: defaultProject.id, // Added required projectId
             filename: file.name,
             mimeType: file.type || 'image/png',
             size: file.size,
