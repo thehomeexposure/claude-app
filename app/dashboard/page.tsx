@@ -1,7 +1,7 @@
 // app/dashboard/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, FormEvent } from "react";
 
 type Project = {
   id: string;
@@ -16,56 +16,99 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/projects", { cache: "no-store" });
-        if (!res.ok) {
-          const body = (await res.json().catch(() => ({}))) as { error?: string };
-          throw new Error(body?.error || `Request failed: ${res.status}`);
-        }
-        const data = (await res.json()) as { projects: Project[] };
-        if (!cancelled) {
-          setProjects(data.projects);
-          setError(null);
-        }
-      } catch (e: unknown) {
-        const message = e instanceof Error ? e.message : String(e);
-        if (!cancelled) setError(message);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // form state
+  const [creating, setCreating] = useState(false);
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
 
-  if (loading) {
-    return (
-      <main className="p-8">
-        <h1 className="text-2xl font-semibold">Dashboard</h1>
-        <p className="mt-2">Loading your projects…</p>
-      </main>
-    );
+  async function load() {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/projects", { cache: "no-store" });
+      if (!res.ok) {
+        // show server error body for debugging
+        const text = await res.text();
+        throw new Error(`GET /api/projects ${res.status}: ${text || res.statusText}`);
+      }
+      const data = (await res.json()) as { projects: Project[] };
+      setProjects(data.projects);
+    } catch (e: unknown) {
+      setProjects(null);
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
   }
 
-  if (error) {
-    return (
-      <main className="p-8">
-        <h1 className="text-2xl font-semibold">Dashboard</h1>
-        <p className="mt-2 text-red-600">Error: {error}</p>
-      </main>
-    );
+  useEffect(() => {
+    load();
+  }, []);
+
+  async function onCreate(e: FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setCreating(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: name.trim(),
+          description: description.trim() || null,
+        }),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`POST /api/projects ${res.status}: ${text || res.statusText}`);
+      }
+      // refresh list
+      setName("");
+      setDescription("");
+      await load();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setCreating(false);
+    }
   }
 
   return (
     <main className="p-8">
-      <h1 className="text-2xl font-semibold">Your Projects</h1>
+      <h1 className="text-2xl font-semibold">Dashboard</h1>
 
-      {projects && projects.length > 0 ? (
-        <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {/* Create form */}
+      <form onSubmit={onCreate} className="mt-6 grid gap-2 max-w-md">
+        <input
+          className="border rounded p-2"
+          placeholder="Project name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+        <textarea
+          className="border rounded p-2"
+          placeholder="Description (optional)"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          rows={3}
+        />
+        <button
+          type="submit"
+          disabled={creating || !name.trim()}
+          className="border rounded px-3 py-2 disabled:opacity-50"
+        >
+          {creating ? "Creating..." : "Create Project"}
+        </button>
+      </form>
+
+      {/* Status */}
+      {loading ? (
+        <p className="mt-6">Loading your projects…</p>
+      ) : error ? (
+        <p className="mt-6 text-red-600">Error: {error}</p>
+      ) : projects && projects.length > 0 ? (
+        <ul className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {projects.map((p) => (
             <li key={p.id} className="rounded-xl border p-4">
               <div className="flex items-center justify-between">
@@ -75,9 +118,7 @@ export default function Dashboard() {
                 </span>
               </div>
               {p.description ? (
-                <p className="mt-2 text-sm opacity-80 line-clamp-3">
-                  {p.description}
-                </p>
+                <p className="mt-2 text-sm opacity-80 line-clamp-3">{p.description}</p>
               ) : null}
               <p className="mt-3 text-xs opacity-60">
                 Updated {new Date(p.updatedAt).toLocaleString()}
@@ -86,7 +127,7 @@ export default function Dashboard() {
           ))}
         </ul>
       ) : (
-        <p className="mt-4 opacity-70">No projects yet.</p>
+        <p className="mt-6 opacity-70">No projects yet.</p>
       )}
     </main>
   );
