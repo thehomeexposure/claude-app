@@ -16,10 +16,24 @@ export const getCurrentUser = async () => {
 };
 
 export const requireAuth = async () => {
-  const user = await getCurrentUser();
+  const clerkUser = await currentUser();
 
-  if (!user) {
+  if (!clerkUser) {
     throw new Error('Unauthorized');
+  }
+
+  let user = await db.user.findUnique({
+    where: { clerkId: clerkUser.id },
+  });
+
+  // Auto-create user if they don't exist in database
+  if (!user) {
+    user = await db.user.create({
+      data: {
+        clerkId: clerkUser.id,
+        email: clerkUser.emailAddresses[0]?.emailAddress || '',
+      },
+    });
   }
 
   return user;
