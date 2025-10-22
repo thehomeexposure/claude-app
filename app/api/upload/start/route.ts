@@ -19,22 +19,18 @@ export async function POST(req: NextRequest) {
     } = body ?? {};
 
     if (!url) {
-      return NextResponse.json(
-        { error: "url is required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "url is required" }, { status: 400 });
     }
 
-    const image = await db.image.create({
-      data: {
-        userId: user.id,
-        ...(projectId ? { projectId } : {}),
-        // Your schema does NOT have `originalUrl`; use `url`
-        url,
-      },
-    });
+    // Build `data` without any `undefined` fields
+    const data =
+      projectId
+        ? { userId: user.id, projectId, url }
+        : { userId: user.id, url };
 
-    // keep response shape stable for the UI
+    const image = await db.image.create({ data });
+
+    // keep response shape stable for any UI that expects jobs array
     return NextResponse.json(
       { image: { ...image, jobs: [] as unknown[] } },
       { status: 201 }
