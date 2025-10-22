@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import type { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
@@ -10,23 +11,23 @@ export async function POST(req: NextRequest) {
     const user = await requireAuth();
     const body = await req.json();
 
-    const {
-      projectId,
-      url, // public blob URL you already created
-    }: {
+    const { projectId, url } = (body ?? {}) as {
       projectId?: string;
       url?: string;
-    } = body ?? {};
+    };
 
     if (!url) {
       return NextResponse.json({ error: "url is required" }, { status: 400 });
     }
 
-    // Build `data` without any `undefined` fields
-    const data =
-      projectId
-        ? { userId: user.id, projectId, url }
-        : { userId: user.id, url };
+    // Build a concrete object and only add projectId if present
+    const data: Prisma.ImageUncheckedCreateInput = {
+      userId: user.id,
+      url,
+    };
+    if (projectId) {
+      data.projectId = projectId;
+    }
 
     const image = await db.image.create({ data });
 
@@ -36,8 +37,7 @@ export async function POST(req: NextRequest) {
       { status: 201 }
     );
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("upload/start error:", msg);
+    console.error("upload/start error:", err);
     return NextResponse.json(
       { error: "Failed to create image record" },
       { status: 500 }
