@@ -12,21 +12,15 @@ export async function POST(req: NextRequest) {
 
     const {
       projectId,
-      url,        // public blob URL you already created
-      filename,
-      mimeType,
-      size,
+      url, // public blob URL you already created
     }: {
       projectId?: string;
       url?: string;
-      filename?: string;
-      mimeType?: string;
-      size?: number;
     } = body ?? {};
 
-    if (!url || !filename || !mimeType || typeof size !== "number") {
+    if (!url) {
       return NextResponse.json(
-        { error: "url, filename, mimeType, and size are required" },
+        { error: "url is required" },
         { status: 400 }
       );
     }
@@ -34,21 +28,23 @@ export async function POST(req: NextRequest) {
     const image = await db.image.create({
       data: {
         userId: user.id,
-        // only set projectId if it exists (matches Prisma types)
         ...(projectId ? { projectId } : {}),
-        // NOTE: your schema does not have `originalUrl`; use `url` instead.
+        // Your schema does NOT have `originalUrl`; use `url`
         url,
-        filename,
-        mimeType,
-        size,
       },
     });
 
     // keep response shape stable for the UI
-    return NextResponse.json({ image: { ...image, jobs: [] as unknown[] } }, { status: 201 });
+    return NextResponse.json(
+      { image: { ...image, jobs: [] as unknown[] } },
+      { status: 201 }
+    );
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("upload/start error:", msg);
-    return NextResponse.json({ error: "Failed to create image record" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to create image record" },
+      { status: 500 }
+    );
   }
 }
