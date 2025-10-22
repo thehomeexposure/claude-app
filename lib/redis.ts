@@ -20,8 +20,6 @@ let client: RedisLike | null = null;
 
 function safeRequire(name: string): unknown {
   try {
-    // avoid static analysis bundling
-    // eslint-disable-next-line @typescript-eslint/no-implied-eval
     const req = (0, eval)("require") as (m: string) => unknown;
     return req(name);
   } catch {
