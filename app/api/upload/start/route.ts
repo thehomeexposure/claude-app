@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
 
     const {
       projectId,
-      url,
+      url,        // public blob URL you already created
       filename,
       mimeType,
       size,
@@ -34,16 +34,17 @@ export async function POST(req: NextRequest) {
     const image = await db.image.create({
       data: {
         userId: user.id,
-        // only set projectId if provided; avoids `string | undefined` type error
+        // only set projectId if it exists (matches Prisma types)
         ...(projectId ? { projectId } : {}),
-        originalUrl: url,
+        // NOTE: your schema does not have `originalUrl`; use `url` instead.
+        url,
         filename,
         mimeType,
         size,
       },
     });
 
-    // keep response shape future-proof
+    // keep response shape stable for the UI
     return NextResponse.json({ image: { ...image, jobs: [] as unknown[] } }, { status: 201 });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
