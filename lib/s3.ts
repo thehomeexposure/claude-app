@@ -1,10 +1,17 @@
-import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+// lib/s3.ts
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  PutObjectCommandInput,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-// Cloudflare R2 client configuration
+// ---- Client (Cloudflare R2) ----
 const r2Client = new S3Client({
   region: "auto",
-  endpoint: process.env.R2_ENDPOINT,
+  endpoint: process.env.R2_ENDPOINT, // e.g. https://<accountid>.r2.cloudflarestorage.com
+  forcePathStyle: true,              // <- important for R2
   credentials: {
     accessKeyId: process.env.R2_ACCESS_KEY_ID!,
     secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
@@ -12,106 +19,98 @@ const r2Client = new S3Client({
 });
 
 const BUCKET_NAME = process.env.R2_BUCKET_NAME!;
+const PUBLIC_BASE = process.env.R2_PUBLIC_URL; // e.g. https://cdn.thehomeexposure.com (or your bucket public URL)
 
-/**
- * Normalize input to a Buffer for upload.
- */
-function toBuffer(
+// ---- Utilities ----
+function getKeyFromUrl(urlOrKey: string): string {
+  if (!urlOrKey.startsWith("http")) return urlOrKey.trim().replace(/^\/+/, "");
+  const u = new URL(urlOrKey);
+  // strip leading slash
+  return u.pathname.replace(/^\/+/, "");
+}
+
+/** Normalize input to a Node Buffer for upload. */
+async function toBuffer(
   data: Blob | File | ArrayBuffer | Uint8Array | string | Buffer
-): Buffer {
+): Promise<Buffer> {
   if (Buffer.isBuffer(data)) return data;
-  if (typeof data === "string") {
-    return Buffer.from(data);
-  }
-  if (data instanceof Uint8Array) {
-    return Buffer.from(data);
-  }
-  if (data instanceof ArrayBuffer) {
-    return Buffer.from(new Uint8Array(data));
+  if (typeof data === "string") return Buffer.from(data);
+  if (data instanceof Uint8Array) return Buffer.from(data);
+  if (data instanceof ArrayBuffer) return Buffer.from(new Uint8Array(data));
+  // Blob/File in Next API routes supports arrayBuffer()
+  // (avoid instanceof because Blob comes from web runtime)
+  // @ts-expect-error - runtime check
+  if (data && typeof data.arrayBuffer === "function") {
+    // @ts-expect-error - runtime check
+    const ab: ArrayBuffer = await data.arrayBuffer();
+    return Buffer.from(new Uint8Array(ab));
   }
   throw new TypeError("Unsupported data type for upload");
 }
 
-/**
- * Download a file from R2 using its key or URL.
- */
+// ---- Public API ----
 export async function getFromS3(urlOrKey: string): Promise<Buffer> {
-  // If it's a full URL, extract the key from it
-  let key = urlOrKey;
-  if (urlOrKey.startsWith('http')) {
-    const url = new URL(urlOrKey);
-    key = url.pathname.slice(1); // Remove leading slash
-  }
+  const Key = getKeyFromUrl(urlOrKey);
 
-  const command = new GetObjectCommand({
-    Bucket: BUCKET_NAME,
-    Key: key,
-  });
+  const res = await r2Client.send(
+    new GetObjectCommand({ Bucket: BUCKET_NAME, Key })
+  );
 
-  const response = await r2Client.send(command);
-
-  if (!response.Body) {
-    throw new Error("Failed to fetch object from R2");
-  }
+  if (!res.Body) throw new Error("Failed to fetch object from R2");
 
   const chunks: Uint8Array[] = [];
-  for await (const chunk of response.Body as AsyncIterable<Uint8Array>) {
+  for await (const chunk of res.Body as AsyncIterable<Uint8Array>) {
     chunks.push(chunk);
   }
-
   return Buffer.concat(chunks);
 }
 
-/**
- * Upload a file to R2 and return the public URL.
- */
+/** Upload and return a public URL (or a path if no PUBLIC_BASE set). */
 export async function uploadToS3(
   key: string,
   data: Blob | File | ArrayBuffer | Uint8Array | string | Buffer,
-  contentType = "application/octet-stream"
+  contentType = "application/octet-stream",
+  opts?: {
+    cacheControl?: string;          // e.g. "public, max-age=31536000, immutable"
+    contentDisposition?: string;    // e.g. `inline; filename="photo.jpg"`
+  }
 ): Promise<string> {
-  const filename = key?.trim() || `${Date.now()}`;
-  const buffer = toBuffer(data);
+  const Key = key?.trim() || `${Date.now()}`;
+  const Body = await toBuffer(data);
 
-  const command = new PutObjectCommand({
+  const input: PutObjectCommandInput = {
     Bucket: BUCKET_NAME,
-    Key: filename,
-    Body: buffer,
+    Key,
+    Body,
     ContentType: contentType,
-  });
+  };
 
-  await r2Client.send(command);
+  if (opts?.cacheControl) input.CacheControl = opts.cacheControl;
+  if (opts?.contentDisposition) input.ContentDisposition = opts.contentDisposition;
 
-  // Construct the public URL
-  const publicUrl = `${process.env.R2_PUBLIC_URL}/${filename}`;
-  return publicUrl;
+  await r2Client.send(new PutObjectCommand(input));
+
+  return PUBLIC_BASE ? `${PUBLIC_BASE.replace(/\/$/, "")}/${Key}` : Key;
 }
 
-/**
- * Upload to R2 and return both key and URL.
- */
+/** Upload and return both key + URL. */
 export async function uploadToS3WithMeta(
   key: string,
   data: Blob | File | ArrayBuffer | Uint8Array | string | Buffer,
-  contentType = "application/octet-stream"
+  contentType = "application/octet-stream",
+  opts?: { cacheControl?: string; contentDisposition?: string }
 ): Promise<{ key: string; url: string }> {
-  const filename = key?.trim() || `${Date.now()}`;
-  const url = await uploadToS3(filename, data, contentType);
-  return { key: filename, url };
+  const Key = key?.trim() || `${Date.now()}`;
+  const url = await uploadToS3(Key, data, contentType, opts);
+  return { key: Key, url };
 }
 
-/**
- * Generate a presigned URL for getting an object from R2.
- */
+/** Presigned GET (for private buckets). */
 export async function getPresignedGetUrl(
   key: string,
   expiresIn = 3600
 ): Promise<string> {
-  const command = new GetObjectCommand({
-    Bucket: BUCKET_NAME,
-    Key: key,
-  });
-
-  const url = await getSignedUrl(r2Client, command, { expiresIn });
-  return url;
+  const Key = getKeyFromUrl(key);
+  const command = new GetObjectCommand({ Bucket: BUCKET_NAME, Key });
+  return getSignedUrl(r2Client, command, { expiresIn });
 }

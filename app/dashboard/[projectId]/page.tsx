@@ -1,341 +1,508 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import { useParams } from "next/navigation"
-import Link from "next/link"
-import { ArrowLeft, Image as ImageIcon, Upload, Check } from "lucide-react"
-import { Card } from "@/components/ui/card"
-import { ImageCard } from "@/components/image-card"
-import { ImageModal } from "@/components/image-modal"
-import { UploadZone } from "@/components/upload-zone"
+/* eslint-disable @next/next/no-img-element */
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import Link from "next/link";
+import {
+  ArrowLeft,
+  Image as ImgIcon,
+  UploadCloud,
+  Download,
+  Trash2,
+  Loader2,
+} from "lucide-react";
 
-type Project = {
-  id: string
-  name: string
-  description: string | null
-  createdAt: string
-  updatedAt: string
-  images: {
-    id: string
-    url: string
-    createdAt: string
-  }[]
-}
+type GalleryItem = {
+  id: string;
+  url: string;
+  filename: string;
+  createdAt: string; // ISO from API
+};
 
-type PropertyImage = {
-  id: string
-  url: string
-  createdAt: string
-}
+type ImagesApiResponse = {
+  images: { id: string; url: string; createdAt: string }[];
+};
 
-export default function ProjectDetailPage() {
-  const params = useParams()
-  const projectId = params.projectId as string
+export default function Page({ params }: { params: { projectId: string } }) {
+  const projectId = params?.projectId;
+  const [items, setItems] = useState<GalleryItem[]>([]);
+  const [modal, setModal] = useState<GalleryItem | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [uploading, setUploading] = useState<boolean>(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const [project, setProject] = useState<Project | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  // Upload state
-  const [isUploading, setIsUploading] = useState(false)
-  const [uploadProgress, setUploadProgress] = useState(0)
-
-  // UI state
-  const [selectedImage, setSelectedImage] = useState<PropertyImage | null>(null)
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
-
-  // Load project data
-  const loadProject = async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await fetch(`/api/projects/${projectId}`, {
-        cache: "no-store",
-      })
-      if (!res.ok) {
-        const text = await res.text()
-        throw new Error(
-          `GET /api/projects/${projectId} ${res.status}: ${text || res.statusText}`
-        )
-      }
-      const data = (await res.json()) as { project: Project }
-      setProject(data.project)
-    } catch (e: unknown) {
-      setProject(null)
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setLoading(false)
-    }
-  }
-
+  // Load images for this project
   useEffect(() => {
-    if (projectId) {
-      loadProject()
-    }
-  }, [projectId])
+    let cancelled = false;
 
-  // File upload handler
-  const handleFileUpload = async (files: FileList | null) => {
-    if (!files || files.length === 0) return
+    async function load() {
+      try {
+        setLoading(true);
+        const qs = projectId ? `?projectId=${encodeURIComponent(projectId)}` : "";
+        const res = await fetch(`/api/images${qs}`, { cache: "no-store" });
+        if (!res.ok) throw new Error("Failed to load images");
+        const data = (await res.json()) as ImagesApiResponse;
 
-    const fileArray = Array.from(files)
+        if (cancelled) return;
 
-    // Validate files
-    const MAX_SIZE = 10 * 1024 * 1024 // 10MB
-    const ACCEPTED_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"]
+        const mapped: GalleryItem[] = (data.images ?? []).map((img) => ({
+          id: img.id,
+          url: img.url,
+          filename: img.url.split("/").pop() || "image.jpg",
+          createdAt: img.createdAt,
+        }));
 
-    if (fileArray.length > 10) {
-      alert("Maximum 10 files allowed per upload")
-      return
-    }
-
-    for (const file of fileArray) {
-      if (!ACCEPTED_TYPES.includes(file.type)) {
-        alert(`File ${file.name} is not a supported image type`)
-        return
-      }
-      if (file.size > MAX_SIZE) {
-        alert(`File ${file.name} exceeds 10MB limit`)
-        return
+        setItems(mapped);
+      } catch (err) {
+        console.error("Load images error:", err);
+        setItems([]);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     }
 
-    setIsUploading(true)
-    setUploadProgress(0)
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
 
-    try {
-      const formData = new FormData()
-      fileArray.forEach((file) => formData.append("files", file))
-      formData.append("projectId", projectId)
+  // Stats
+  const stats = useMemo(() => {
+    const total = items.length;
+    const now = Date.now();
+    const uploadedToday = items.filter((i) => {
+      const d = new Date(i.createdAt).getTime();
+      return now - d < 24 * 60 * 60 * 1000;
+    }).length;
+    return { total, today: uploadedToday, ready: total };
+  }, [items]);
 
-      const xhr = new XMLHttpRequest()
+  // Upload helpers
+  const onPickFiles = () => fileInputRef.current?.click();
 
-      xhr.upload.addEventListener("progress", (e) => {
-        if (e.lengthComputable) {
-          const progress = Math.round((e.loaded / e.total) * 100)
-          setUploadProgress(progress)
+  const uploadFiles = useCallback(
+    async (files: FileList | File[] | null) => {
+      if (!files || (files as File[]).length === 0) return;
+
+      // Hard-cap to 10 files per request (API enforces as well)
+      const fileArr = Array.from(files).slice(0, 10);
+      const form = new FormData();
+      fileArr.forEach((f) => form.append("files", f));
+      if (projectId) form.append("projectId", projectId);
+
+      try {
+        setUploading(true);
+        const res = await fetch("/api/upload", { method: "POST", body: form });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err?.error || "Upload failed");
         }
-      })
+        const payload = (await res.json()) as {
+          images: { id: string; url: string; createdAt: string }[];
+        };
 
-      xhr.addEventListener("load", () => {
-        if (xhr.status === 201) {
-          setUploadProgress(100)
-          setTimeout(() => {
-            setIsUploading(false)
-            setUploadProgress(0)
-            loadProject()
-          }, 1000)
-        } else {
-          const response = JSON.parse(xhr.responseText)
-          alert(response.error || "Upload failed")
-          setIsUploading(false)
-          setUploadProgress(0)
-        }
-      })
+        const appended: GalleryItem[] = (payload.images ?? []).map((img) => ({
+          id: img.id,
+          url: img.url,
+          filename: img.url.split("/").pop() || "image.jpg",
+          createdAt: img.createdAt,
+        }));
 
-      xhr.addEventListener("error", () => {
-        alert("Upload failed. Please try again.")
-        setIsUploading(false)
-        setUploadProgress(0)
-      })
+        // Prepend new images
+        setItems((prev) => [...appended, ...prev]);
+      } catch (e) {
+        console.error(e);
+        // TODO: replace with your toast UI
+      } finally {
+        setUploading(false);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      }
+    },
+    [projectId]
+  );
 
-      xhr.open("POST", "/api/upload")
-      xhr.send(formData)
-    } catch (err) {
-      console.error("Upload error:", err)
-      alert("Upload failed. Please try again.")
-      setIsUploading(false)
-      setUploadProgress(0)
-    }
-  }
+  const onFilesChosen = (files: FileList | null) => uploadFiles(files);
 
-  // Delete handler
-  const handleDelete = (id: string) => {
-    if (confirm("Are you sure you want to delete this image?")) {
-      // TODO: Implement delete API call
-      alert("Delete functionality coming soon")
-    }
-  }
-
-  // Download handler
-  const handleDownload = (image: PropertyImage) => {
-    window.open(image.url, "_blank")
-  }
-
-  // Calculate stats
-  const totalImages = project?.images.length || 0
-  const uploadedToday = project?.images.filter((img) => {
-    const imgDate = new Date(img.createdAt)
-    const today = new Date()
-    return (
-      imgDate.getDate() === today.getDate() &&
-      imgDate.getMonth() === today.getMonth() &&
-      imgDate.getFullYear() === today.getFullYear()
-    )
-  }).length || 0
-
-  // Loading state
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
-          <div className="animate-pulse space-y-8">
-            <div className="h-8 bg-secondary rounded w-1/4"></div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="h-24 bg-secondary rounded"></div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // Error state
-  if (error || !project) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-zinc-950 to-black">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
-          <Card className="p-8 text-center border-destructive">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
-              <svg
-                className="h-8 w-8 text-destructive"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-            </div>
-            <h2 className="text-xl font-semibold mb-2">Error Loading Project</h2>
-            <p className="text-sm text-muted-foreground mb-6">
-              {error || "Project not found"}
-            </p>
-            <Link
-              href="/dashboard"
-              className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to Dashboard
-            </Link>
-          </Card>
-        </div>
-      </div>
-    )
-  }
+  // Delete (local for now)
+  const onDelete = (id: string) => {
+    setItems((prev) => prev.filter((i) => i.id !== id));
+    // TODO: call DELETE /api/images/:id when ready
+  };
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="border-b border-zinc-800 bg-zinc-900">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
+    <main className="min-h-[100svh] text-white">
+      {/* subtle premium background */}
+      <div className="pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(1000px_600px_at_20%_-10%,rgba(59,130,246,0.12),transparent)]" />
+      <div className="fixed inset-0 -z-10 bg-[#0a0a0b]" />
+
+      <div className="mx-auto w-full max-w-7xl px-5 sm:px-8 py-8">
+        {/* Back link */}
+        <div className="mb-6">
           <Link
             href="/dashboard"
-            className="group inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
+            className="inline-flex items-center gap-2 text-zinc-400 hover:text-white"
           >
-            <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
-            <span>Back to Dashboard</span>
+            <ArrowLeft className="h-4 w-4" />
+            Back to Dashboard
           </Link>
-
-          <div className="mt-4">
-            <h1 className="text-3xl font-bold text-foreground">{project.name}</h1>
-            <p className="mt-1 text-muted-foreground">Property Photos</p>
-          </div>
         </div>
-      </div>
 
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
+        <header className="mb-8">
+          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">
+            123 Main Street
+          </h1>
+          <p className="text-zinc-400 mt-1">Property Photos</p>
+        </header>
+
         {/* Stats */}
-        <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-3">
-          <Card className="p-6 bg-card border-border">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-primary/10 p-3">
-                <ImageIcon className="h-6 w-6 text-primary" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Total Images</p>
-                <p className="text-2xl font-bold text-foreground">{totalImages}</p>
-              </div>
-            </div>
-          </Card>
+        <section className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-10">
+          <StatCard
+            label="Total Images"
+            value={stats.total}
+            accent="blue"
+            icon={<ImgIcon className="h-5 w-5" />}
+          />
+          <StatCard
+            label="Uploaded Today"
+            value={stats.today}
+            accent="green"
+            icon={<UploadCloud className="h-5 w-5" />}
+          />
+          <StatCard
+            label="Ready to Share"
+            value={stats.ready}
+            accent="purple"
+            icon={<Download className="h-5 w-5" />}
+          />
+        </section>
 
-          <Card className="p-6 bg-card border-border">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-green-500/10 p-3">
-                <Upload className="h-6 w-6 text-green-500" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Uploaded Today</p>
-                <p className="text-2xl font-bold text-foreground">{uploadedToday}</p>
-              </div>
-            </div>
-          </Card>
-
-          <Card className="p-6 bg-card border-border">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-purple-500/10 p-3">
-                <Check className="h-6 w-6 text-purple-500" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Ready to Share</p>
-                <p className="text-2xl font-bold text-foreground">{totalImages}</p>
-              </div>
-            </div>
-          </Card>
-        </div>
-
-        {/* Upload Zone */}
+        {/* Upload zone with drag & drop */}
         <UploadZone
-          onFileUpload={handleFileUpload}
-          isUploading={isUploading}
-          uploadProgress={uploadProgress}
+          onPickFiles={onPickFiles}
+          onDropFiles={(files) => uploadFiles(files)}
+          uploading={uploading}
+          projectId={projectId}
+        />
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={(e) => onFilesChosen(e.target.files)}
         />
 
-        {/* Images Grid */}
-        {project.images.length === 0 ? (
-          <Card className="p-16 text-center border-dashed">
-            <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-secondary">
-              <ImageIcon className="h-10 w-10 text-muted-foreground" />
-            </div>
-            <h3 className="text-xl font-semibold mb-2">No images yet</h3>
-            <p className="text-muted-foreground">Upload your first property photos to get started</p>
-          </Card>
-        ) : (
-          <div>
-            <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-xl font-semibold">
-                Property Images ({project.images.length})
-              </h2>
-            </div>
-
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {project.images.map((image) => (
-                <ImageCard
-                  key={image.id}
-                  image={image}
-                  onDelete={handleDelete}
-                  onDownload={handleDownload}
-                  onClick={() => setSelectedImage(image)}
-                />
+        {/* Grid */}
+        <section className="mt-10">
+          {loading ? (
+            <LoadingState />
+          ) : items.length === 0 ? (
+            <EmptyState />
+          ) : (
+            <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {items.map((img) => (
+                <li key={img.id}>
+                  <ImageCard
+                    item={img}
+                    onOpen={() => setModal(img)}
+                    onDelete={() => onDelete(img.id)}
+                  />
+                </li>
               ))}
-            </div>
-          </div>
-        )}
+            </ul>
+          )}
+        </section>
       </div>
 
-      {/* Image Modal */}
-      <ImageModal
-        image={selectedImage}
-        onClose={() => setSelectedImage(null)}
-        onDelete={handleDelete}
-        onDownload={handleDownload}
-      />
+      {/* Fullscreen modal */}
+      {modal && (
+        <ImageModal
+          item={modal}
+          onClose={() => setModal(null)}
+          onDownload={() => window.open(modal.url, "_blank")}
+        />
+      )}
+    </main>
+  );
+}
+
+/* =============== UI bits =============== */
+
+function StatCard({
+  label,
+  value,
+  icon,
+  accent = "blue",
+}: {
+  label: string;
+  value: number | string;
+  icon: React.ReactNode;
+  accent?: "blue" | "green" | "purple";
+}) {
+  const ring =
+    accent === "blue"
+      ? "hover:shadow-[0_0_30px_rgba(59,130,246,.15)]"
+      : accent === "green"
+      ? "hover:shadow-[0_0_30px_rgba(34,197,94,.15)]"
+      : "hover:shadow-[0_0_30px_rgba(168,85,247,.15)]";
+
+  const badge =
+    accent === "blue"
+      ? "bg-blue-500/15 text-blue-400 ring-1 ring-inset ring-blue-400/30"
+      : accent === "green"
+      ? "bg-emerald-500/15 text-emerald-400 ring-1 ring-inset ring-emerald-400/30"
+      : "bg-violet-500/15 text-violet-400 ring-1 ring-inset ring-violet-400/30";
+
+  return (
+    <div
+      className={`rounded-2xl border border-zinc-800/70 bg-zinc-950/60 px-5 py-5 backdrop-blur transition-all duration-200 ${ring}`}
+    >
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-zinc-400">{label}</p>
+        <span
+          className={`inline-flex h-9 w-9 items-center justify-center rounded-xl ${badge}`}
+        >
+          {icon}
+        </span>
+      </div>
+      <div className="mt-2 text-3xl font-semibold">{value}</div>
     </div>
-  )
+  );
+}
+
+function UploadZone({
+  onPickFiles,
+  onDropFiles,
+  uploading,
+  projectId,
+}: {
+  onPickFiles: () => void;
+  onDropFiles: (files: FileList | File[]) => void;
+  uploading: boolean;
+  projectId?: string;
+}) {
+  const [dragActive, setDragActive] = useState(false);
+
+  // Prevent default for drag events
+  const prevent = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    prevent(e);
+    setDragActive(true);
+  };
+  const handleDragOver = (e: React.DragEvent) => {
+    prevent(e);
+    if (!dragActive) setDragActive(true);
+  };
+  const handleDragLeave = (e: React.DragEvent) => {
+    prevent(e);
+    setDragActive(false);
+  };
+  const handleDrop = (e: React.DragEvent) => {
+    prevent(e);
+    setDragActive(false);
+    const files = e.dataTransfer?.files ?? null;
+    if (files && files.length > 0) onDropFiles(files);
+  };
+
+  return (
+    <section
+      role="region"
+      aria-label="Upload property photos"
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      className={[
+        "rounded-3xl border border-dashed p-8 sm:p-10 text-center transition-all duration-200",
+        "bg-zinc-950/40 border-zinc-800/70",
+        "hover:border-blue-500/50 hover:shadow-[0_0_40px_rgba(59,130,246,.15)]",
+        dragActive ? "border-blue-500/60 shadow-[0_0_50px_rgba(59,130,246,.25)]" : "",
+      ].join(" ")}
+    >
+      <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-2xl bg-blue-500/10 ring-1 ring-inset ring-blue-500/30 shadow-[0_0_35px_rgba(59,130,246,.25)]">
+        {uploading ? (
+          <Loader2 className="h-10 w-10 animate-spin text-blue-400" />
+        ) : (
+          <UploadCloud className="h-10 w-10 text-blue-400" />
+        )}
+      </div>
+      <h2 className="mt-5 text-xl font-medium">Upload Property Photos</h2>
+      <p className="mt-2 text-zinc-400">
+        Drag &amp; drop files here, or click the button below
+      </p>
+      <p className="text-zinc-500">
+        JPG, PNG, WEBP • Max 10MB per file
+        {projectId ? <span className="ml-2">(Project: {projectId})</span> : null}
+      </p>
+      <div className="mt-6">
+        <button
+          type="button"
+          disabled={uploading}
+          onClick={onPickFiles}
+          className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium shadow-lg shadow-blue-600/25 outline-none transition hover:bg-blue-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 focus-visible:ring-offset-zinc-950 disabled:opacity-60"
+        >
+          {uploading ? "Uploading…" : "Choose Files"}
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function ImageCard({
+  item,
+  onOpen,
+  onDelete,
+}: {
+  item: GalleryItem;
+  onOpen: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div
+      className="group relative aspect-[4/3] cursor-pointer overflow-hidden rounded-xl border border-zinc-800/60 bg-zinc-950/40"
+      onClick={onOpen}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => e.key === "Enter" && onOpen()}
+    >
+      <img
+        src={item.url}
+        alt={item.filename}
+        className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
+      />
+
+      {/* hover overlay */}
+      <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+        <div className="absolute inset-0 bg-gradient-to-t from-zinc-900/80 via-zinc-900/30 to-transparent backdrop-blur-[1.5px]" />
+      </div>
+
+      {/* meta + actions */}
+      <div className="absolute inset-x-0 bottom-0 flex items-end justify-between p-3 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+        <div className="pointer-events-none">
+          <div className="text-sm font-medium">{item.filename}</div>
+          <div className="text-xs text-zinc-400">{formatTimeAgo(item.createdAt)}</div>
+        </div>
+        <div className="flex gap-2">
+          <button
+            className="pointer-events-auto inline-flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-800/70 text-zinc-100 backdrop-blur ring-1 ring-inset ring-zinc-700/60 transition hover:bg-zinc-700"
+            aria-label="Download"
+            onClick={(e) => {
+              e.stopPropagation();
+              window.open(item.url, "_blank");
+            }}
+          >
+            <Download className="h-4 w-4" />
+          </button>
+          <button
+            className="pointer-events-auto inline-flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-800/70 text-red-300 backdrop-blur ring-1 ring-inset ring-zinc-700/60 transition hover:bg-red-600/20"
+            aria-label="Delete"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ImageModal({
+  item,
+  onClose,
+  onDownload,
+}: {
+  item: GalleryItem;
+  onClose: () => void;
+  onDownload: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-black/80 backdrop-blur-sm p-4"
+      onClick={onClose}
+      onKeyDown={(e) => e.key === "Escape" && onClose()}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div
+        className="relative max-h-[85svh] w-full max-w-5xl overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <img
+          src={item.url}
+          alt={item.filename}
+          className="w-full object-contain max-h-[78svh]"
+        />
+        <div className="flex items-center justify-between border-t border-zinc-800 p-3">
+          <div>
+            <div className="text-sm font-medium">{item.filename}</div>
+            <div className="text-xs text-zinc-400">{formatTimeAgo(item.createdAt)}</div>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={onDownload}
+              className="inline-flex items-center gap-2 rounded-lg bg-zinc-800/80 px-3 py-2 text-sm ring-1 ring-inset ring-zinc-700 hover:bg-zinc-700"
+            >
+              <Download className="h-4 w-4" />
+              Download
+            </button>
+            <button
+              onClick={onClose}
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm hover:bg-blue-500"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EmptyState() {
+  return (
+    <div className="grid place-items-center rounded-3xl border border-zinc-800/70 bg-zinc-950/50 py-20 text-center">
+      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-zinc-800/60 ring-1 ring-inset ring-zinc-700">
+        <ImgIcon className="h-8 w-8 text-zinc-400" />
+      </div>
+      <h3 className="mt-5 text-lg font-medium">No photos yet</h3>
+      <p className="mt-1 max-w-md text-zinc-400">
+        Drag &amp; drop images above or click <span className="text-white">Choose Files</span> to start uploading.
+      </p>
+    </div>
+  );
+}
+
+function LoadingState() {
+  return (
+    <div className="flex items-center justify-center gap-3 rounded-3xl border border-zinc-800/70 bg-zinc-950/50 py-16 text-zinc-300">
+      <Loader2 className="h-5 w-5 animate-spin" />
+      <span>Fetching images…</span>
+    </div>
+  );
+}
+
+function formatTimeAgo(dateString: string): string {
+  const date = new Date(dateString);
+  const now = new Date();
+  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+  if (seconds < 60) return "Just now";
+  if (seconds < 3600) return `${Math.floor(seconds / 60)} minutes ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)} hours ago`;
+  if (seconds < 604800) return `${Math.floor(seconds / 86400)} days ago`;
+
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
