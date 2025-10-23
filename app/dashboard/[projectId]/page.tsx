@@ -195,7 +195,7 @@ export default function ProjectDetailPage() {
   // Error state
   if (error || !project) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-gradient-to-br from-zinc-950 to-black">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
           <Card className="p-8 text-center border-destructive">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
@@ -233,7 +233,7 @@ export default function ProjectDetailPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <div className="border-b border-border bg-card">
+      <div className="border-b border-zinc-800 bg-zinc-900">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
           <Link
             href="/dashboard"
