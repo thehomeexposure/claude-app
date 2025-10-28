@@ -1,18 +1,18 @@
 // app/api/images/[id]/route.ts
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(
-  _req: Request,
+  req: NextRequest,
   // Next.js route handlers accept a context-like second arg; don't type it to avoid build errors.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   context: any
 ) {
   try {
-    const user = await requireAuth();
+    const user = await requireAuth(req);
     const id = context?.params?.id as string;
 
     const image = await db.image.findFirst({

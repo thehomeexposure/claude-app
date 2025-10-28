@@ -6,9 +6,9 @@ import { db } from "@/lib/db";
 export const dynamic = "force-dynamic";
 
 // POST /api/process/:imageId
-export async function POST(_req: NextRequest, context: unknown) {
+export async function POST(req: NextRequest, context: unknown) {
   try {
-    const user = await requireAuth();
+    const user = await requireAuth(req);
 
     const imageId =
       (context as { params?: { imageId?: string } })?.params?.imageId;

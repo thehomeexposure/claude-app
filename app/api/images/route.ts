@@ -6,9 +6,9 @@ import { db } from "@/lib/db";
 export const dynamic = "force-dynamic";
 
 // GET /api/images
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const user = await requireAuth();
+    const user = await requireAuth(req);
 
     const images = await db.image.findMany({
       where: { userId: user.id },
@@ -29,7 +29,7 @@ export async function GET() {
 // POST /api/images
 export async function POST(req: NextRequest) {
   try {
-    const user = await requireAuth();
+    const user = await requireAuth(req);
     const body = await req.json();
     const { projectId, url } = body as { projectId?: string; url?: string };
 

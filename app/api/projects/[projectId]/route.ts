@@ -8,11 +8,11 @@ export const dynamic = "force-dynamic";
 
 // ---------- GET /api/projects/[projectId] ----------
 export const GET = async (
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
 ) => {
   try {
-    const user = await requireAuth();
+    const user = await requireAuth(req);
     const { projectId } = await params;
 
     const project = await db.project.findUnique({

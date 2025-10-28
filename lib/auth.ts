@@ -1,5 +1,17 @@
-import { auth, clerkClient } from '@clerk/nextjs/server';
+import { auth, clerkClient, getAuth } from '@clerk/nextjs/server';
 import { db } from './db';
+import type { NextRequest } from 'next/server';
+
+type AuthRequest = NextRequest | Request;
+
+const resolveAuth = async (req?: AuthRequest) => {
+  if (req) {
+    const result = await getAuth(req);
+    return { userId: result?.userId ?? null };
+  }
+
+  return await auth();
+};
 
 const ensureDbUser = async (clerkId: string) => {
   const existing = await db.user.findUnique({
@@ -32,8 +44,8 @@ const ensureDbUser = async (clerkId: string) => {
   });
 };
 
-export const getCurrentUser = async () => {
-  const { userId } = await auth();
+export const getCurrentUser = async (req?: AuthRequest) => {
+  const { userId } = await resolveAuth(req);
 
   if (!userId) {
     return null;
@@ -44,8 +56,8 @@ export const getCurrentUser = async () => {
   });
 };
 
-export const requireAuth = async () => {
-  const { userId } = await auth();
+export const requireAuth = async (req?: AuthRequest) => {
+  const { userId } = await resolveAuth(req);
 
   if (!userId) {
     throw new Error('Unauthorized');
@@ -54,8 +66,8 @@ export const requireAuth = async () => {
   return ensureDbUser(userId);
 };
 
-export const getOrCreateUser = async () => {
-  const { userId } = await auth();
+export const getOrCreateUser = async (req?: AuthRequest) => {
+  const { userId } = await resolveAuth(req);
 
   if (!userId) {
     throw new Error('Unauthorized');
