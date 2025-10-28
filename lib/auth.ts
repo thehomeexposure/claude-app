@@ -2,7 +2,7 @@ import { auth, clerkClient, getAuth } from '@clerk/nextjs/server';
 import { db } from './db';
 import type { NextRequest } from 'next/server';
 
-type AuthRequest = NextRequest | Request;
+type AuthRequest = NextRequest;
 
 const resolveAuth = async (req?: AuthRequest) => {
   if (req) {
