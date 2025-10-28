@@ -33,7 +33,7 @@ const ensureDbUser = async (clerkId: string) => {
 };
 
 export const getCurrentUser = async () => {
-  const { userId } = auth();
+  const { userId } = await auth();
 
   if (!userId) {
     return null;
@@ -45,7 +45,7 @@ export const getCurrentUser = async () => {
 };
 
 export const requireAuth = async () => {
-  const { userId } = auth();
+  const { userId } = await auth();
 
   if (!userId) {
     throw new Error('Unauthorized');
@@ -55,7 +55,7 @@ export const requireAuth = async () => {
 };
 
 export const getOrCreateUser = async () => {
-  const { userId } = auth();
+  const { userId } = await auth();
 
   if (!userId) {
     throw new Error('Unauthorized');
