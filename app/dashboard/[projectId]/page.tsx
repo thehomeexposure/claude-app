@@ -1,7 +1,7 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback, use } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -23,8 +23,14 @@ type ImagesApiResponse = {
   images: { id: string; url: string; createdAt: string }[];
 };
 
-export default function Page({ params }: { params: { projectId: string } }) {
-  const projectId = params?.projectId;
+export default function Page({
+  params,
+}: {
+  params: Promise<{ projectId: string }>;
+}) {
+  // unwrap the Promise without making the component async
+  const { projectId } = use(params);
+
   const [items, setItems] = useState<GalleryItem[]>([]);
   const [modal, setModal] = useState<GalleryItem | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
