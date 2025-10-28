@@ -5,9 +5,10 @@ import { requireAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-/* ---------- GET: list user's projects ---------- */
+/* GET /api/projects */
 export async function GET(_req: NextRequest) {
   try {
+    // If not signed in, just return an empty list (don’t throw)
     let user: { id: string } | null = null;
     try {
       user = await requireAuth();
@@ -22,58 +23,59 @@ export async function GET(_req: NextRequest) {
         select: {
           id: true,
           name: true,
+          description: true,
           createdAt: true,
           _count: { select: { images: true } },
         },
       });
       return NextResponse.json({ projects }, { status: 200 });
-    } catch (dbErr: unknown) {
-      console.error("DB error in /api/projects (GET):", dbErr);
+    } catch (dbErr) {
+      console.error("DB error in GET /api/projects:", dbErr);
       return NextResponse.json({ projects: [], note: "db_unavailable" }, { status: 200 });
     }
-  } catch (err: unknown) {
-    console.error("Unexpected error in /api/projects (GET):", err);
+  } catch (err) {
+    console.error("Unexpected error in GET /api/projects:", err);
     return NextResponse.json({ projects: [], note: "unexpected_error" }, { status: 200 });
   }
 }
 
-/* ---------- POST: create a project ---------- */
-type CreateProjectPayload = {
-  name: string;
-  description?: string | null;
-};
-
-function parseCreatePayload(u: unknown): CreateProjectPayload {
-  const obj = (typeof u === "object" && u !== null) ? (u as Record<string, unknown>) : {};
-  const name = typeof obj.name === "string" ? obj.name.trim() : "";
-  const description =
-    typeof obj.description === "string" ? obj.description.trim() :
-    obj.description == null ? null : undefined;
-  return { name, description };
-}
-
+/* POST /api/projects */
 export async function POST(req: NextRequest) {
   try {
+    // Must be signed in to create a project
     const user = await requireAuth();
 
-    const raw = await req.json().catch(() => ({}));
-    const { name, description } = parseCreatePayload(raw);
+    // Safe parse body
+    const bodyUnknown = await req.json().catch(() => null as unknown);
+    if (!bodyUnknown || typeof bodyUnknown !== "object") {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+    const body = bodyUnknown as { name?: string; description?: string };
+
+    const name = (body.name ?? "").toString().trim();
+    const description = body.description ? body.description.toString().trim() : "";
 
     if (!name) {
       return NextResponse.json({ error: "Project name is required" }, { status: 400 });
     }
 
     const project = await db.project.create({
-      data: { userId: user.id, name, description: description ?? null },
-      select: { id: true, name: true, createdAt: true },
+      data: {
+        userId: user.id,
+        name,
+        description: description || null,
+      },
+      select: { id: true, name: true, description: true, createdAt: true },
     });
 
     return NextResponse.json({ project }, { status: 201 });
   } catch (err: unknown) {
-    if (err instanceof Error && /not signed in|unauth/i.test(err.message)) {
+    // If auth failed in requireAuth(), return 401
+    const message = err instanceof Error ? err.message : "";
+    if (message.toLowerCase().includes("unauthorized") || message.toLowerCase().includes("auth")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    console.error("Error in /api/projects (POST):", err);
-    return NextResponse.json({ error: "Failed to create project" }, { status: 500 });
+    console.error("POST /api/projects error:", err);
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
