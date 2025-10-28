@@ -28,7 +28,10 @@ export default function Dashboard() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/projects", { cache: "no-store" });
+      const res = await fetch("/api/projects", {
+        cache: "no-store",
+        credentials: "include",
+      });
       if (!res.ok) {
         const text = await res.text();
         throw new Error(`GET /api/projects ${res.status}: ${text || res.statusText}`);
@@ -56,6 +59,7 @@ export default function Dashboard() {
       const res = await fetch("/api/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           name: name.trim(),
           description: description.trim() || null,

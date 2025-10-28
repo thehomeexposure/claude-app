@@ -25,7 +25,7 @@ export default function UploadPage() {
   useEffect(() => {
     async function loadProjects() {
       try {
-        const res = await fetch("/api/projects");
+        const res = await fetch("/api/projects", { credentials: "include" });
         if (res.ok) {
           const data = await res.json();
           setProjects(data.projects || []);
@@ -130,6 +130,7 @@ export default function UploadPage() {
 
       const res = await fetch("/api/upload", {
         method: "POST",
+        credentials: "include",
         body: formData,
       });
 

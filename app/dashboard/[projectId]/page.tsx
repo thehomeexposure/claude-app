@@ -45,7 +45,10 @@ export default function Page({
       try {
         setLoading(true);
         const qs = projectId ? `?projectId=${encodeURIComponent(projectId)}` : "";
-        const res = await fetch(`/api/images${qs}`, { cache: "no-store" });
+        const res = await fetch(`/api/images${qs}`, {
+          cache: "no-store",
+          credentials: "include",
+        });
         if (!res.ok) throw new Error("Failed to load images");
         const data = (await res.json()) as ImagesApiResponse;
 
@@ -99,7 +102,11 @@ export default function Page({
 
       try {
         setUploading(true);
-        const res = await fetch("/api/upload", { method: "POST", body: form });
+        const res = await fetch("/api/upload", {
+          method: "POST",
+          body: form,
+          credentials: "include",
+        });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
           throw new Error(err?.error || "Upload failed");

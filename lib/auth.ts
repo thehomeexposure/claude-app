@@ -6,11 +6,20 @@ type AuthRequest = NextRequest;
 
 const resolveAuth = async (req?: AuthRequest) => {
   if (req) {
-    const result = await getAuth(req);
-    return { userId: result?.userId ?? null };
+    try {
+      const result = await getAuth(req);
+      if (result?.userId) {
+        return { userId: result.userId };
+      }
+    } catch (error) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('getAuth failed for request', error);
+      }
+    }
   }
 
-  return await auth();
+  const { userId } = await auth();
+  return { userId: userId ?? null };
 };
 
 const ensureDbUser = async (clerkId: string) => {
@@ -24,7 +33,8 @@ const ensureDbUser = async (clerkId: string) => {
 
   let email: string | null = null;
   try {
-    const client = await clerkClient();
+    const client =
+      typeof clerkClient === 'function' ? await clerkClient() : clerkClient;
     const clerkUser = await client.users.getUser(clerkId);
     email =
       clerkUser.primaryEmailAddress?.emailAddress ??
