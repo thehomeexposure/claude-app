@@ -12,7 +12,8 @@ const ensureDbUser = async (clerkId: string) => {
 
   let email: string | null = null;
   try {
-    const clerkUser = await clerkClient.users.getUser(clerkId);
+    const client = await clerkClient();
+    const clerkUser = await client.users.getUser(clerkId);
     email =
       clerkUser.primaryEmailAddress?.emailAddress ??
       clerkUser.emailAddresses[0]?.emailAddress ??
