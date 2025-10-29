@@ -12,16 +12,17 @@ const isPublicRoute = createRouteMatcher([
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
-  // Allow public routes
   if (isPublicRoute(req)) {
     return NextResponse.next();
   }
 
-  // Protect everything else (handles redirect to sign-in automatically)
-  const { protect } = await auth();
-  protect();
+  const session = await auth();
+  if (!session.userId) {
+    const redirectUrl = new URL("/sign-in", req.url);
+    redirectUrl.searchParams.set("redirect_url", req.nextUrl.pathname || "/dashboard");
+    return NextResponse.redirect(redirectUrl);
+  }
 
-  // If the user is authenticated, continue
   return NextResponse.next();
 });
 
