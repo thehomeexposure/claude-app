@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 // POST /api/process/:imageId
 export async function POST(req: NextRequest, context: unknown) {
   try {
-    const user = await requireAuth(req);
+    const user = await requireAuth();
 
     const imageId =
       (context as { params?: { imageId?: string } })?.params?.imageId;

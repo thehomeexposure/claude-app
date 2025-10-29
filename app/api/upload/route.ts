@@ -11,7 +11,7 @@ const MAX_FILE_SIZE = 16 * 1024 * 1024;
 
 export async function POST(req: NextRequest) {
   try {
-    const user = await requireAuth(req);
+    const user = await requireAuth();
 
     // Parse multipart form data
     const formData = await req.formData();

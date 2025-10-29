@@ -12,7 +12,7 @@ export const GET = async (
   { params }: { params: Promise<{ projectId: string }> }
 ) => {
   try {
-    const user = await requireAuth(req);
+    const user = await requireAuth();
     const { projectId } = await params;
 
     const project = await db.project.findUnique({
@@ -53,7 +53,7 @@ export const DELETE = async (
   { params }: { params: Promise<{ projectId: string }> }
 ) => {
   try {
-    const user = await requireAuth(req);
+    const user = await requireAuth();
     const { projectId } = await params;
 
     const project = await db.project.findFirst({

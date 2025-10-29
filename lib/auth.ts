@@ -1,28 +1,13 @@
-import { auth, clerkClient, getAuth } from '@clerk/nextjs/server';
+import { auth, clerkClient } from '@clerk/nextjs/server';
 import { db } from './db';
-import type { NextRequest } from 'next/server';
-
-type AuthRequest = NextRequest;
 
 const isProd = process.env.NODE_ENV === 'production';
-const allowDevAuth = !isProd || process.env.ALLOW_DEV_AUTH === 'true';
+const allowDevAuth =
+  (!isProd && !process.env.CLERK_SECRET_KEY) || process.env.ALLOW_DEV_AUTH === 'true';
 const fallbackUserId = () =>
   process.env.DEV_CLERK_USER_ID?.trim() || 'local-dev-user';
 
-const resolveAuth = async (req?: AuthRequest) => {
-  if (req) {
-    try {
-      const result = await getAuth(req);
-      if (result?.userId) {
-        return { userId: result.userId };
-      }
-    } catch (error) {
-      if (process.env.NODE_ENV !== 'production') {
-        console.error('getAuth failed for request', error);
-      }
-    }
-  }
-
+const resolveAuth = async () => {
   const { userId } = await auth();
   if (userId) {
     return { userId };
@@ -74,8 +59,8 @@ const ensureDbUser = async (clerkId: string) => {
   });
 };
 
-export const getCurrentUser = async (req?: AuthRequest) => {
-  const { userId } = await resolveAuth(req);
+export const getCurrentUser = async () => {
+  const { userId } = await resolveAuth();
 
   if (!userId) {
     return null;
@@ -86,8 +71,8 @@ export const getCurrentUser = async (req?: AuthRequest) => {
   });
 };
 
-export const requireAuth = async (req?: AuthRequest) => {
-  const { userId } = await resolveAuth(req);
+export const requireAuth = async () => {
+  const { userId } = await resolveAuth();
 
   if (!userId) {
     throw new Error('Unauthorized');
@@ -96,8 +81,8 @@ export const requireAuth = async (req?: AuthRequest) => {
   return ensureDbUser(userId);
 };
 
-export const getOrCreateUser = async (req?: AuthRequest) => {
-  const { userId } = await resolveAuth(req);
+export const getOrCreateUser = async () => {
+  const { userId } = await resolveAuth();
 
   if (!userId) {
     throw new Error('Unauthorized');

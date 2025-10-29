@@ -6,12 +6,12 @@ import { requireAuth } from "@/lib/auth";
 export const dynamic = "force-dynamic";
 
 /* GET /api/projects */
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
     // If not signed in, just return an empty list (don’t throw)
     let user: { id: string } | null = null;
     try {
-      user = await requireAuth(req);
+      user = await requireAuth();
     } catch {
       return NextResponse.json({ projects: [] }, { status: 200 });
     }
@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     // Must be signed in to create a project
-    const user = await requireAuth(req);
+    const user = await requireAuth();
 
     // Safe parse body
     const bodyUnknown = await req.json().catch(() => null as unknown);

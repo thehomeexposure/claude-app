@@ -140,6 +140,10 @@ export default function Page({
 
   const onDelete = async (id: string) => {
     if (deletingImages.includes(id)) return;
+    const confirmed =
+      typeof window === "undefined" ||
+      window.confirm("Delete this image? This cannot be undone.");
+    if (!confirmed) return;
     setDeletingImages((prev) => [...prev, id]);
     const previous = items;
     setItems((prev) => prev.filter((i) => i.id !== id));
