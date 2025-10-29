@@ -50,6 +50,12 @@ export default function Page({
           cache: "no-store",
           credentials: "include",
         });
+        if (res.status === 401) {
+          if (typeof window !== "undefined") {
+            window.location.href = "/sign-in";
+          }
+          return;
+        }
         if (!res.ok) throw new Error("Failed to load images");
         const data = (await res.json()) as ImagesApiResponse;
 
@@ -108,6 +114,12 @@ export default function Page({
           body: form,
           credentials: "include",
         });
+        if (res.status === 401) {
+          if (typeof window !== "undefined") {
+            window.location.href = "/sign-in";
+          }
+          return;
+        }
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
           throw new Error(err?.error || "Upload failed");
@@ -153,6 +165,13 @@ export default function Page({
         method: "DELETE",
         credentials: "include",
       });
+
+      if (res.status === 401) {
+        if (typeof window !== "undefined") {
+          window.location.href = "/sign-in";
+        }
+        return;
+      }
 
       if (!res.ok) {
         const text = await res.text();

@@ -26,6 +26,10 @@ export default function UploadPage() {
     async function loadProjects() {
       try {
         const res = await fetch("/api/projects", { credentials: "include" });
+        if (res.status === 401) {
+          window.location.href = "/sign-in";
+          return;
+        }
         if (res.ok) {
           const data = await res.json();
           setProjects(data.projects || []);
@@ -133,6 +137,10 @@ export default function UploadPage() {
         credentials: "include",
         body: formData,
       });
+      if (res.status === 401) {
+        window.location.href = "/sign-in";
+        return;
+      }
 
       if (!res.ok) {
         const data = await res.json();
