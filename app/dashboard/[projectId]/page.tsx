@@ -35,6 +35,7 @@ export default function Page({
   const [modal, setModal] = useState<GalleryItem | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [uploading, setUploading] = useState<boolean>(false);
+  const [deletingImages, setDeletingImages] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Load images for this project
@@ -137,10 +138,28 @@ export default function Page({
 
   const onFilesChosen = (files: FileList | null) => uploadFiles(files);
 
-  // Delete (local for now)
-  const onDelete = (id: string) => {
+  const onDelete = async (id: string) => {
+    if (deletingImages.includes(id)) return;
+    setDeletingImages((prev) => [...prev, id]);
+    const previous = items;
     setItems((prev) => prev.filter((i) => i.id !== id));
-    // TODO: call DELETE /api/images/:id when ready
+
+    try {
+      const res = await fetch(`/api/images/${id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`DELETE /api/images/${id} ${res.status}: ${text || res.statusText}`);
+      }
+    } catch (error) {
+      console.error(error);
+      setItems(previous);
+    } finally {
+      setDeletingImages((prev) => prev.filter((value) => value !== id));
+    }
   };
 
   return (
@@ -221,6 +240,7 @@ export default function Page({
                     item={img}
                     onOpen={() => setModal(img)}
                     onDelete={() => onDelete(img.id)}
+                    deleting={deletingImages.includes(img.id)}
                   />
                 </li>
               ))}
@@ -371,10 +391,12 @@ function ImageCard({
   item,
   onOpen,
   onDelete,
+  deleting = false,
 }: {
   item: GalleryItem;
   onOpen: () => void;
   onDelete: () => void;
+  deleting?: boolean;
 }) {
   return (
     <div
@@ -413,14 +435,15 @@ function ImageCard({
             <Download className="h-4 w-4" />
           </button>
           <button
-            className="pointer-events-auto inline-flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-800/70 text-red-300 backdrop-blur ring-1 ring-inset ring-zinc-700/60 transition hover:bg-red-600/20"
+            className="pointer-events-auto inline-flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-800/70 text-red-300 backdrop-blur ring-1 ring-inset ring-zinc-700/60 transition hover:bg-red-600/20 disabled:cursor-not-allowed disabled:opacity-60"
             aria-label="Delete"
+            disabled={deleting}
             onClick={(e) => {
               e.stopPropagation();
               onDelete();
             }}
           >
-            <Trash2 className="h-4 w-4" />
+            {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
           </button>
         </div>
       </div>

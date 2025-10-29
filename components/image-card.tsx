@@ -24,7 +24,6 @@ type ImageCardProps = {
 };
 
 export function ImageCard({ image, onDelete, onDownload, onClick }: ImageCardProps) {
-  const [isHovered, setIsHovered] = useState(false);
   const [imgOk, setImgOk] = useState(true);
   const [downloading, setDownloading] = useState(false);
 
@@ -101,8 +100,6 @@ export function ImageCard({ image, onDelete, onDownload, onClick }: ImageCardPro
   return (
     <Card
       className="group relative cursor-pointer overflow-hidden border border-zinc-800/80 bg-zinc-900/60 transition-all hover:border-blue-400/40 hover:shadow-xl hover:shadow-blue-500/10 focus-within:border-blue-400/50"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
       onClick={onClick}
       role="button"
       tabIndex={0}

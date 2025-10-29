@@ -9,10 +9,14 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   try {
     const user = await requireAuth(req);
+    const projectId = req.nextUrl.searchParams.get("projectId") ?? undefined;
 
     const images = await db.image.findMany({
-      where: { userId: user.id },
-      orderBy: { createdAt: "desc" }
+      where: {
+        userId: user.id,
+        ...(projectId ? { projectId } : {}),
+      },
+      orderBy: { createdAt: "desc" },
       // removed include.jobs because there's no Job model yet
     });
 

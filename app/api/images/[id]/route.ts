@@ -31,3 +31,38 @@ export async function GET(
     return NextResponse.json({ error: "Failed to fetch image" }, { status: 500 });
   }
 }
+
+export async function DELETE(
+  req: NextRequest,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  context: any
+) {
+  try {
+    const user = await requireAuth(req);
+    const id = context?.params?.id as string;
+
+    if (!id) {
+      return NextResponse.json({ error: "Missing image id" }, { status: 400 });
+    }
+
+    const image = await db.image.findFirst({
+      where: { id, userId: user.id },
+      select: { id: true },
+    });
+
+    if (!image) {
+      return NextResponse.json({ error: "Image not found" }, { status: 404 });
+    }
+
+    await db.image.delete({ where: { id: image.id } });
+
+    return NextResponse.json({ ok: true }, { status: 200 });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.toLowerCase().includes("unauthorized")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    console.error("Delete image error:", msg);
+    return NextResponse.json({ error: "Failed to delete image" }, { status: 500 });
+  }
+}
