@@ -2,6 +2,7 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
+// Public routes (no auth)
 const isPublicRoute = createRouteMatcher([
   "/",
   "/sign-in(.*)",
@@ -10,33 +11,24 @@ const isPublicRoute = createRouteMatcher([
   "/api/webhooks(.*)",
 ]);
 
-export default clerkMiddleware(async (auth, req) => {
-  try {
-    // Always allow public routes
-    if (isPublicRoute(req)) return NextResponse.next();
-
-    // Get auth state (don’t throw)
-    const { userId, redirectToSignIn } = await auth();
-
-    // If not signed in:
-    if (!userId) {
-      // In Netlify deploy-previews, don’t block or crash — let the UI render
-      if (process.env.NETLIFY && process.env.CONTEXT === "deploy-preview") {
-        return NextResponse.next();
-      }
-      // In production, redirect to Clerk sign-in (no throw)
-      return redirectToSignIn({ returnBackUrl: req.url });
-    }
-
-    return NextResponse.next();
-  } catch (err) {
-    // Never crash the edge function; log and continue
-    console.error("Middleware error:", err);
+export default clerkMiddleware((auth, req) => {
+  // Allow public routes
+  if (isPublicRoute(req)) {
     return NextResponse.next();
   }
+
+  // Protect everything else (handles redirect to sign-in automatically)
+  auth().protect();
+
+  // If the user is authenticated, continue
+  return NextResponse.next();
 });
 
-// Run on app routes; skip Next assets & static files
+// Recommended matcher from Clerk docs
 export const config = {
-  matcher: ["/((?!_next|.*\\..*|favicon.ico).*)", "/(api|trpc)(.*)"],
+  matcher: [
+    "/((?!.+\\.[\\w]+$|_next).*)", // all app routes except static files & _next
+    "/",
+    "/(api|trpc)(.*)",            // include API routes
+  ],
 };
