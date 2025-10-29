@@ -1,6 +1,5 @@
 // app/dashboard/page.tsx
-import { redirectToSignIn } from "@clerk/nextjs";
-import { auth } from "@clerk/nextjs/server";
+import { auth, redirectToSignIn } from "@clerk/nextjs/server";
 import DashboardClient from "./dashboard-client";
 export const dynamic = "force-dynamic";
 
