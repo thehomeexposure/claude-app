@@ -46,3 +46,36 @@ export const GET = async (
     return NextResponse.json({ error: message }, { status: 500 });
   }
 };
+
+// ---------- DELETE /api/projects/[projectId] ----------
+export const DELETE = async (
+  req: NextRequest,
+  { params }: { params: Promise<{ projectId: string }> }
+) => {
+  try {
+    const user = await requireAuth(req);
+    const { projectId } = await params;
+
+    const project = await db.project.findFirst({
+      where: { id: projectId, userId: user.id },
+      select: { id: true },
+    });
+
+    if (!project) {
+      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    }
+
+    await db.project.delete({
+      where: { id: project.id },
+    });
+
+    return NextResponse.json({ ok: true }, { status: 200 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.toLowerCase().includes("unauthorized")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    console.error("Delete project error:", message);
+    return NextResponse.json({ error: "Failed to delete project" }, { status: 500 });
+  }
+};

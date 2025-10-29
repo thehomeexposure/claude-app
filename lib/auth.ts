@@ -4,6 +4,11 @@ import type { NextRequest } from 'next/server';
 
 type AuthRequest = NextRequest;
 
+const isProd = process.env.NODE_ENV === 'production';
+const allowDevAuth = !isProd || process.env.ALLOW_DEV_AUTH === 'true';
+const fallbackUserId = () =>
+  process.env.DEV_CLERK_USER_ID?.trim() || 'local-dev-user';
+
 const resolveAuth = async (req?: AuthRequest) => {
   if (req) {
     try {
@@ -23,11 +28,8 @@ const resolveAuth = async (req?: AuthRequest) => {
     return { userId };
   }
 
-  if (process.env.NODE_ENV !== 'production') {
-    const fallbackId =
-      process.env.DEV_CLERK_USER_ID ||
-      `local-dev-user`;
-    return { userId: fallbackId };
+  if (allowDevAuth) {
+    return { userId: fallbackUserId() };
   }
 
   return { userId: null };
@@ -43,10 +45,10 @@ const ensureDbUser = async (clerkId: string) => {
   }
 
   let email: string | null = null;
-  const shouldLookupRemote =
-    !clerkId.startsWith('local-dev-user') && !!process.env.CLERK_SECRET_KEY;
+  const isFallbackUser = clerkId === fallbackUserId();
+  const clerkConfigured = Boolean(process.env.CLERK_SECRET_KEY);
 
-  if (shouldLookupRemote) {
+  if (clerkConfigured && !isFallbackUser) {
     try {
       const client =
         typeof clerkClient === 'function' ? await clerkClient() : clerkClient;
@@ -56,11 +58,11 @@ const ensureDbUser = async (clerkId: string) => {
         clerkUser.emailAddresses[0]?.emailAddress ??
         null;
     } catch (err) {
-      if (process.env.NODE_ENV !== 'production') {
+      if (!isProd) {
         console.error('Failed to load Clerk user profile', err);
       }
     }
-  } else if (process.env.NODE_ENV !== 'production') {
+  } else if (allowDevAuth) {
     email = 'dev-user@example.com';
   }
 

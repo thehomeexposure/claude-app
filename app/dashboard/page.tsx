@@ -3,6 +3,7 @@
 
 import { useEffect, useState, FormEvent } from "react";
 import Link from "next/link";
+import { Trash2 } from "lucide-react";
 
 type Project = {
   id: string;
@@ -17,6 +18,7 @@ export default function Dashboard() {
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // form state
   const [creating, setCreating] = useState(false);
@@ -77,6 +79,30 @@ export default function Dashboard() {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function handleDelete(projectId: string) {
+    if (deletingId) return;
+    const confirmed = typeof window !== "undefined" ? window.confirm("Delete this project and all associated images?") : true;
+    if (!confirmed) return;
+
+    setDeletingId(projectId);
+    setError(null);
+    try {
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`DELETE /api/projects/${projectId} ${res.status}: ${text || res.statusText}`);
+      }
+      await load();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -173,8 +199,20 @@ export default function Dashboard() {
               <Link
                 key={project.id}
                 href={`/dashboard/${project.id}`}
-                className="group overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/70 p-6 transition duration-200 hover:border-white/30 hover:bg-zinc-900/60"
+                className="group relative overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/70 p-6 transition duration-200 hover:border-white/30 hover:bg-zinc-900/60"
               >
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    void handleDelete(project.id);
+                  }}
+                  disabled={deletingId === project.id}
+                  className="absolute right-4 top-4 inline-flex items-center rounded-full border border-red-500/30 bg-red-500/10 p-2 text-red-200 transition hover:border-red-400/60 hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
                 <div className="flex items-start justify-between">
                   <h2 className="line-clamp-1 text-lg font-medium text-white transition group-hover:text-blue-400">
                     {project.name}
