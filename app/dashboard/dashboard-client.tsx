@@ -43,7 +43,9 @@ export default function DashboardClient() {
       });
       if (res.status === 401) {
         if (typeof window !== "undefined") {
-          window.location.href = "/sign-in";
+          window.location.href = `/sign-in?redirect_url=${encodeURIComponent(
+            window.location.pathname || "/dashboard"
+          )}`;
         }
         return;
       }
@@ -97,7 +99,9 @@ export default function DashboardClient() {
       });
       if (res.status === 401) {
         if (typeof window !== "undefined") {
-          window.location.href = "/sign-in";
+          window.location.href = `/sign-in?redirect_url=${encodeURIComponent(
+            window.location.pathname || "/dashboard"
+          )}`;
         }
         return;
       }
@@ -130,7 +134,9 @@ export default function DashboardClient() {
       });
       if (res.status === 401) {
         if (typeof window !== "undefined") {
-          window.location.href = "/sign-in";
+          window.location.href = `/sign-in?redirect_url=${encodeURIComponent(
+            window.location.pathname || "/dashboard"
+          )}`;
         }
         return;
       }

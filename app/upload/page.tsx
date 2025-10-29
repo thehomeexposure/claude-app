@@ -27,7 +27,7 @@ export default function UploadPage() {
       try {
         const res = await fetch("/api/projects", { credentials: "include" });
         if (res.status === 401) {
-          window.location.href = "/sign-in";
+          window.location.href = `/sign-in?redirect_url=${encodeURIComponent(window.location.pathname || "/upload")}`;
           return;
         }
         if (res.ok) {
@@ -138,7 +138,7 @@ export default function UploadPage() {
         body: formData,
       });
       if (res.status === 401) {
-        window.location.href = "/sign-in";
+        window.location.href = `/sign-in?redirect_url=${encodeURIComponent(window.location.pathname || "/upload")}`;
         return;
       }
 
