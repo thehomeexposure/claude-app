@@ -19,7 +19,18 @@ const resolveAuth = async (req?: AuthRequest) => {
   }
 
   const { userId } = await auth();
-  return { userId: userId ?? null };
+  if (userId) {
+    return { userId };
+  }
+
+  if (process.env.NODE_ENV !== 'production') {
+    const fallbackId =
+      process.env.DEV_CLERK_USER_ID ||
+      `local-dev-user`;
+    return { userId: fallbackId };
+  }
+
+  return { userId: null };
 };
 
 const ensureDbUser = async (clerkId: string) => {
@@ -32,18 +43,25 @@ const ensureDbUser = async (clerkId: string) => {
   }
 
   let email: string | null = null;
-  try {
-    const client =
-      typeof clerkClient === 'function' ? await clerkClient() : clerkClient;
-    const clerkUser = await client.users.getUser(clerkId);
-    email =
-      clerkUser.primaryEmailAddress?.emailAddress ??
-      clerkUser.emailAddresses[0]?.emailAddress ??
-      null;
-  } catch (err) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.error('Failed to load Clerk user profile', err);
+  const shouldLookupRemote =
+    !clerkId.startsWith('local-dev-user') && !!process.env.CLERK_SECRET_KEY;
+
+  if (shouldLookupRemote) {
+    try {
+      const client =
+        typeof clerkClient === 'function' ? await clerkClient() : clerkClient;
+      const clerkUser = await client.users.getUser(clerkId);
+      email =
+        clerkUser.primaryEmailAddress?.emailAddress ??
+        clerkUser.emailAddresses[0]?.emailAddress ??
+        null;
+    } catch (err) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('Failed to load Clerk user profile', err);
+      }
     }
+  } else if (process.env.NODE_ENV !== 'production') {
+    email = 'dev-user@example.com';
   }
 
   return db.user.create({
