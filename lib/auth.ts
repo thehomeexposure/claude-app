@@ -4,7 +4,7 @@ import type { NextRequest } from 'next/server';
 
 const isProd = process.env.NODE_ENV === 'production';
 const allowDevAuth =
-  (!isProd && !process.env.CLERK_SECRET_KEY) || process.env.ALLOW_DEV_AUTH === 'true';
+  !isProd && process.env.ALLOW_DEV_AUTH === 'true';
 const fallbackUserId = () =>
   process.env.DEV_CLERK_USER_ID?.trim() || 'local-dev-user';
 
