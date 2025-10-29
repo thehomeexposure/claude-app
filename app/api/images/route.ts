@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 // GET /api/images
 export async function GET(req: NextRequest) {
   try {
-    const user = await requireAuth();
+    const user = await requireAuth(req);
     const projectId = req.nextUrl.searchParams.get("projectId") ?? undefined;
 
     const images = await db.image.findMany({
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
 // POST /api/images
 export async function POST(req: NextRequest) {
   try {
-    const user = await requireAuth();
+    const user = await requireAuth(req);
     const body = await req.json();
     const { projectId, url } = body as { projectId?: string; url?: string };
 

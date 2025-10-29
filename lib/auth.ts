@@ -1,5 +1,6 @@
-import { auth, clerkClient } from '@clerk/nextjs/server';
+import { auth, clerkClient, getAuth } from '@clerk/nextjs/server';
 import { db } from './db';
+import type { NextRequest } from 'next/server';
 
 const isProd = process.env.NODE_ENV === 'production';
 const allowDevAuth =
@@ -7,7 +8,20 @@ const allowDevAuth =
 const fallbackUserId = () =>
   process.env.DEV_CLERK_USER_ID?.trim() || 'local-dev-user';
 
-const resolveAuth = async () => {
+const resolveAuth = async (req?: NextRequest) => {
+  if (req) {
+    try {
+      const session = getAuth(req);
+      if (session?.userId) {
+        return { userId: session.userId };
+      }
+    } catch (error) {
+      if (!isProd) {
+        console.error('getAuth failed for request', error);
+      }
+    }
+  }
+
   const { userId } = await auth();
   if (userId) {
     return { userId };
@@ -59,8 +73,8 @@ const ensureDbUser = async (clerkId: string) => {
   });
 };
 
-export const getCurrentUser = async () => {
-  const { userId } = await resolveAuth();
+export const getCurrentUser = async (req?: NextRequest) => {
+  const { userId } = await resolveAuth(req);
 
   if (!userId) {
     return null;
@@ -71,8 +85,8 @@ export const getCurrentUser = async () => {
   });
 };
 
-export const requireAuth = async () => {
-  const { userId } = await resolveAuth();
+export const requireAuth = async (req?: NextRequest) => {
+  const { userId } = await resolveAuth(req);
 
   if (!userId) {
     throw new Error('Unauthorized');
@@ -81,8 +95,8 @@ export const requireAuth = async () => {
   return ensureDbUser(userId);
 };
 
-export const getOrCreateUser = async () => {
-  const { userId } = await resolveAuth();
+export const getOrCreateUser = async (req?: NextRequest) => {
+  const { userId } = await resolveAuth(req);
 
   if (!userId) {
     throw new Error('Unauthorized');

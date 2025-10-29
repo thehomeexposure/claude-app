@@ -1,19 +1,20 @@
 // app/api/projects/route.ts
 import { NextRequest, NextResponse } from "next/server";
+import { clerkClient } from "@clerk/nextjs/server";
 import { db } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 /* GET /api/projects */
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     // If not signed in, just return an empty list (don’t throw)
-    let user: { id: string } | null = null;
+    let user: Awaited<ReturnType<typeof requireAuth>> | null = null;
     try {
-      user = await requireAuth();
+      user = await requireAuth(req);
     } catch {
-      return NextResponse.json({ projects: [] }, { status: 200 });
+      return NextResponse.json({ projects: [], user: null }, { status: 200 });
     }
 
     try {
@@ -28,14 +29,54 @@ export async function GET() {
           _count: { select: { images: true } },
         },
       });
-      return NextResponse.json({ projects }, { status: 200 });
+      let profile: {
+        displayName: string;
+        email: string | null;
+        imageUrl: string | null;
+      } | null = null;
+
+      if (user) {
+        const fallbackName =
+          user.email?.split("@")[0] || "Agent";
+        profile = {
+          displayName: fallbackName,
+          email: user.email ?? null,
+          imageUrl: null,
+        };
+
+        if (process.env.CLERK_SECRET_KEY) {
+          try {
+            const clerkUser = await clerkClient.users.getUser(user.clerkId);
+            profile.displayName =
+              clerkUser.fullName?.trim() ||
+              clerkUser.username ||
+              clerkUser.emailAddresses?.[0]?.emailAddress ||
+              profile.displayName;
+            profile.email =
+              clerkUser.emailAddresses?.[0]?.emailAddress ?? profile.email;
+            profile.imageUrl = clerkUser.imageUrl || profile.imageUrl;
+          } catch (clerkErr) {
+            if (process.env.NODE_ENV !== "production") {
+              console.error("Failed to load Clerk profile", clerkErr);
+            }
+          }
+        }
+      }
+
+      return NextResponse.json({ projects, user: profile }, { status: 200 });
     } catch (dbErr) {
       console.error("DB error in GET /api/projects:", dbErr);
-      return NextResponse.json({ projects: [], note: "db_unavailable" }, { status: 200 });
+      return NextResponse.json(
+        { projects: [], user: null, note: "db_unavailable" },
+        { status: 200 }
+      );
     }
   } catch (err) {
     console.error("Unexpected error in GET /api/projects:", err);
-    return NextResponse.json({ projects: [], note: "unexpected_error" }, { status: 200 });
+    return NextResponse.json(
+      { projects: [], user: null, note: "unexpected_error" },
+      { status: 200 }
+    );
   }
 }
 
@@ -43,7 +84,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     // Must be signed in to create a project
-    const user = await requireAuth();
+    const user = await requireAuth(req);
 
     // Safe parse body
     const bodyUnknown = await req.json().catch(() => null as unknown);

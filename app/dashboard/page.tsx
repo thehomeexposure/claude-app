@@ -1,7 +1,7 @@
 // app/dashboard/page.tsx
 "use client";
 
-import { useEffect, useState, FormEvent } from "react";
+import { useEffect, useState, FormEvent, useMemo } from "react";
 import Link from "next/link";
 import { Trash2 } from "lucide-react";
 
@@ -14,11 +14,18 @@ type Project = {
   _count: { images: number };
 };
 
+type UserProfile = {
+  displayName: string;
+  email: string | null;
+  imageUrl: string | null;
+};
+
 export default function Dashboard() {
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
 
   // form state
   const [creating, setCreating] = useState(false);
@@ -38,10 +45,15 @@ export default function Dashboard() {
         const text = await res.text();
         throw new Error(`GET /api/projects ${res.status}: ${text || res.statusText}`);
       }
-      const data = (await res.json()) as { projects: Project[] };
+      const data = (await res.json()) as {
+        projects: Project[];
+        user: UserProfile | null;
+      };
       setProjects(data.projects);
+      setProfile(data.user);
     } catch (e: unknown) {
       setProjects(null);
+      setProfile(null);
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
@@ -51,6 +63,16 @@ export default function Dashboard() {
   useEffect(() => {
     load();
   }, []);
+
+  const greetingName = useMemo(() => {
+    if (!profile) return "Agent";
+    return profile.displayName || profile.email || "Agent";
+  }, [profile]);
+
+  const avatarInitial = useMemo(() => {
+    const source = profile?.displayName || profile?.email || "Agent";
+    return source.trim().charAt(0).toUpperCase();
+  }, [profile]);
 
   async function onCreate(e: FormEvent) {
     e.preventDefault();
@@ -115,8 +137,30 @@ export default function Dashboard() {
         {/* Header */}
         <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between mb-12">
           <div>
-            <h1 className="text-3xl font-semibold text-white">Project Dashboard</h1>
-            <p className="mt-2 text-sm text-zinc-400">
+            <div className="flex items-center gap-4">
+              <div className="relative h-12 w-12 overflow-hidden rounded-full border border-white/10 bg-zinc-900/70 shadow-lg shadow-black/40">
+                {profile?.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={profile.imageUrl}
+                    alt={greetingName}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <span className="flex h-full w-full items-center justify-center text-lg font-semibold text-zinc-200">
+                    {avatarInitial}
+                  </span>
+                )}
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-zinc-500">Welcome back</p>
+                <h1 className="text-2xl font-semibold text-white">Hello, {greetingName}</h1>
+                {profile?.email && (
+                  <p className="text-xs text-zinc-500">{profile.email}</p>
+                )}
+              </div>
+            </div>
+            <p className="mt-4 max-w-xl text-sm text-zinc-400">
               Manage luxury property shoots, review processed galleries, and launch new workstreams in seconds.
             </p>
           </div>

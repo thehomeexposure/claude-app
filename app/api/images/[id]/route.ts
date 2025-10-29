@@ -12,7 +12,7 @@ export async function GET(
   context: any
 ) {
   try {
-    const user = await requireAuth();
+    const user = await requireAuth(req);
     const id = context?.params?.id as string;
 
     const image = await db.image.findFirst({
@@ -38,7 +38,7 @@ export async function DELETE(
   context: any
 ) {
   try {
-    const user = await requireAuth();
+    const user = await requireAuth(req);
     const id = context?.params?.id as string;
 
     if (!id) {
