@@ -46,7 +46,9 @@ export async function GET(req: NextRequest) {
 
         if (process.env.CLERK_SECRET_KEY) {
           try {
-            const clerkUser = await clerkClient.users.getUser(user.clerkId);
+            const client =
+              typeof clerkClient === "function" ? await clerkClient() : clerkClient;
+            const clerkUser = await client.users.getUser(user.clerkId);
             profile.displayName =
               clerkUser.fullName?.trim() ||
               clerkUser.username ||
