@@ -1,13 +1,13 @@
 // app/dashboard/page.tsx
-import { auth, redirectToSignIn } from "@clerk/nextjs/server";
+import { redirectToSignIn } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
+import DashboardClient from "./dashboard-client";
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const { userId } = await auth();
   if (!userId) {
     return redirectToSignIn({ returnBackUrl: "/dashboard" });
-    // (Your version with `redirect("/sign-in?redirect_url=/dashboard")` also works;
-    // this is just the Clerk helper.)
   }
   return <DashboardClient />;
 }
