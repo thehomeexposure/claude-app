@@ -35,14 +35,6 @@ const resolveAuth = async (req?: NextRequest) => {
 };
 
 const ensureDbUser = async (clerkId: string) => {
-  const existing = await db.user.findUnique({
-    where: { clerkId },
-  });
-
-  if (existing) {
-    return existing;
-  }
-
   let email: string | null = null;
   const isFallbackUser = clerkId === fallbackUserId();
   const clerkConfigured = Boolean(process.env.CLERK_SECRET_KEY);
@@ -65,10 +57,16 @@ const ensureDbUser = async (clerkId: string) => {
     email = 'dev-user@example.com';
   }
 
-  return db.user.create({
-    data: {
+  // Use upsert to handle race conditions and ensure user exists
+  return db.user.upsert({
+    where: { clerkId },
+    create: {
       clerkId,
       email,
+    },
+    update: {
+      // Update email if it's provided and different
+      ...(email ? { email } : {}),
     },
   });
 };

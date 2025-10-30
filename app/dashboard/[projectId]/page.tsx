@@ -10,6 +10,7 @@ import {
   Download,
   Trash2,
   Loader2,
+  Camera,
 } from "lucide-react";
 
 type GalleryItem = {
@@ -37,6 +38,7 @@ export default function Page({
   const [uploading, setUploading] = useState<boolean>(false);
   const [deletingImages, setDeletingImages] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
 
   // Load images for this project
   useEffect(() => {
@@ -96,6 +98,7 @@ export default function Page({
 
   // Upload helpers
   const onPickFiles = () => fileInputRef.current?.click();
+  const onPickCamera = () => cameraInputRef.current?.click();
 
   const uploadFiles = useCallback(
     async (files: FileList | File[] | null) => {
@@ -143,6 +146,7 @@ export default function Page({
       } finally {
         setUploading(false);
         if (fileInputRef.current) fileInputRef.current.value = "";
+        if (cameraInputRef.current) cameraInputRef.current.value = "";
       }
     },
     [projectId]
@@ -236,6 +240,7 @@ export default function Page({
         {/* Upload zone with drag & drop */}
         <UploadZone
           onPickFiles={onPickFiles}
+          onPickCamera={onPickCamera}
           onDropFiles={(files) => uploadFiles(files)}
           uploading={uploading}
           projectId={projectId}
@@ -245,6 +250,14 @@ export default function Page({
           type="file"
           accept="image/*"
           multiple
+          className="hidden"
+          onChange={(e) => onFilesChosen(e.target.files)}
+        />
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
           className="hidden"
           onChange={(e) => onFilesChosen(e.target.files)}
         />
@@ -330,11 +343,13 @@ function StatCard({
 
 function UploadZone({
   onPickFiles,
+  onPickCamera,
   onDropFiles,
   uploading,
   projectId,
 }: {
   onPickFiles: () => void;
+  onPickCamera: () => void;
   onDropFiles: (files: FileList | File[]) => void;
   uploading: boolean;
   projectId?: string;
@@ -390,19 +405,29 @@ function UploadZone({
       </div>
       <h2 className="mt-5 text-xl font-medium">Upload Property Photos</h2>
       <p className="mt-2 text-zinc-400">
-        Drag &amp; drop files here, or click the button below
+        Drag &amp; drop files here, or use the buttons below to take a photo or upload files
       </p>
       <p className="text-zinc-500">
         JPG, PNG, WEBP • Max 10MB per file
         {projectId ? <span className="ml-2">(Project: {projectId})</span> : null}
       </p>
-      <div className="mt-6">
+      <div className="mt-6 flex gap-3 justify-center">
+        <button
+          type="button"
+          disabled={uploading}
+          onClick={onPickCamera}
+          className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2 text-sm font-medium shadow-lg shadow-green-600/25 outline-none transition hover:bg-green-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-green-500 focus-visible:ring-offset-zinc-950 disabled:opacity-60"
+        >
+          <Camera className="h-4 w-4" />
+          {uploading ? "Uploading…" : "Take Photo"}
+        </button>
         <button
           type="button"
           disabled={uploading}
           onClick={onPickFiles}
-          className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium shadow-lg shadow-blue-600/25 outline-none transition hover:bg-blue-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 focus-visible:ring-offset-zinc-950 disabled:opacity-60"
+          className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium shadow-lg shadow-blue-600/25 outline-none transition hover:bg-blue-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 focus-visible:ring-offset-zinc-950 disabled:opacity-60"
         >
+          <UploadCloud className="h-4 w-4" />
           {uploading ? "Uploading…" : "Choose Files"}
         </button>
       </div>

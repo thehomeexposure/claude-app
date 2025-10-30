@@ -64,8 +64,11 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     console.error("Unexpected error in GET /api/projects:", err);
+    const errorDetails = process.env.NODE_ENV === "development" 
+      ? { error: message, stack: err instanceof Error ? err.stack : undefined }
+      : {};
     return NextResponse.json(
-      { projects: [], user: null, note: "unexpected_error" },
+      { projects: [], user: null, note: "unexpected_error", ...errorDetails },
       { status: 500 }
     );
   }
